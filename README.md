@@ -76,6 +76,43 @@ Remove-Item Env:\TEST_DATABASE_URL
 
 测试 fixture 先通过 Alembic 迁移独立测试库，然后为每个测试开启外层事务并在结束时回滚，既不清空业务数据库，也不保留测试业务记录。没有 SQLite 替代验证。若修改 PostgreSQL 用户名/数据库名，相应修改命令参数。
 
+## Seed 与完整回归
+
+Seed 只能在 `APP_ENV=development` 或 `test` 时显式执行，应用启动不执行 Seed：
+
+```powershell
+.venv/Scripts/python.exe -m scripts.seed_data
+.venv/Scripts/python.exe -m scripts.seed_data
+```
+
+使用固定 `SEED-*` 业务编号、固定 UUID 和 UTC 时间。第一次向空开发库写入模拟记录；后续按固定 UUID 只补缺失记录，不覆盖已有修改、不删除其他数据。一轮写入在同一事务提交；同业务键被其他 UUID 占用时，数据库唯一约束使整轮失败回滚，不悄悄接管数据。此脚本用于单进程开发维护，不保证并发 Seed 的重试成功。
+
+查询示例编号：`SEED-P001` 纯棉短袖、`SEED-P002` 连帽卫衣、`SEED-P003` 下架外套；`SEED-O001` 至 `SEED-O006` 依次为待支付、待履约、部分发货、已发货、已完成、已取消。奇数订单属于 `customer-a`，偶数属于 `customer-b`；UUID 可通过 `scripts.seed_data.seed_id("customer-a")` 等固定键获取。仅为模拟资料，不代表真实客户、商品或政策。
+
+Migration 往返使用第三个专用空库，避免清理已经 Seed 的开发库或普通集成测试库：
+
+```powershell
+# 仅首次创建；已经存在时不要重复创建。
+docker compose exec -T db createdb -U ecommerce ecommerce_ops_migration_test
+
+$env:TEST_DATABASE_URL = & .venv/Scripts/python.exe -c 'from app.core.config import Settings; from sqlalchemy.engine import make_url; print(make_url(Settings().database_url.get_secret_value()).set(database="ecommerce_ops_test").render_as_string(hide_password=False))'
+$env:MIGRATION_DATABASE_URL = & .venv/Scripts/python.exe -c 'from app.core.config import Settings; from sqlalchemy.engine import make_url; print(make_url(Settings().database_url.get_secret_value()).set(database="ecommerce_ops_migration_test").render_as_string(hide_password=False))'
+.venv/Scripts/python.exe -m pytest -q
+Remove-Item Env:\TEST_DATABASE_URL,Env:\MIGRATION_DATABASE_URL
+```
+
+往返测试实际依次运行 `alembic upgrade head`、`downgrade base`、`upgrade head`、`current`、`check`，并对比前后的约束和索引。只有名称以 `_migration_test` 结尾、没有业务记录及未知表的数据库才允许降级。按既有 `0001` 的设计，降级删除全部业务表及其约束/索引，保留共享扩展和 Alembic 自己的空版本表，不是删除整个数据库。没有配置该环境变量时此测试会明确 skip。
+
+## 基础查询 Service 合约
+
+`app/services/catalog.py` 提供商品搜索、详情和 SKU 筛选；商品搜索为转义通配符的名称子串匹配。默认仅返回 active 商品及 active SKU，不存在或不可展示商品返回 `None`，列表无匹配返回空列表。
+
+`app/services/inventory.py` 提供 SKU 库存查询，返回各仓 `on_hand`、`reserved`、`available`、`updated_at` 和查询时间。不可展示或不存在 SKU 返回 `None`，存在 SKU 但无匹配仓库存记录返回空 `stocks`，不能解释成确定的零库存。
+
+`app/services/orders.py` 提供订单和物流查询，必须传入服务端 `RequestContext`；`order_id`/`order_no` 二选一。`orders:read:self` 在 SQL 中限制用户归属，`orders:read:any` 才允许跨用户查询；数据库角色标签 operator 本身不授予权限。无权限、他人订单、不存在订单统一抛出 `OrderNotAccessible("order_not_accessible")`。返回类型定义于 `app/schemas/commerce.py`，不返回完整地址或用户身份字段。物流明细另外过滤同订单关系，避免异常关联泄露其他订单明细。
+
+Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、不生成自然语言、不依赖 Agent/LLM。不新增业务 HTTP 路由，现有可信身份依赖仍默认拒绝。正式认证和运行数据库最小权限仍是对外开放业务前的前置项。
+
 `requirements.lock` 是本轮解析出的直接和传递依赖版本约束快照；安装时配合 `-c` 使用，不包含本地路径或凭据。它不是带哈希的跨平台完整供应链锁文件。运行镜像只安装运行依赖，pytest/httpx 等放在 `test` 可选依赖中。
 
-原始文档版本保留在 [Phase 01 快照](docs/history/phase01/PROJECT_STATE.md)，当前进度始终以根目录 PROJECT_STATE.md 为准。
+原有 [Phase 01 快照](docs/history/phase01/PROJECT_STATE.md) 继续保留；后续历史版本统一使用 Git 管理，不再生成重复文档副本。当前进度始终以根目录 PROJECT_STATE.md 为准。
