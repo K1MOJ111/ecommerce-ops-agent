@@ -1,6 +1,6 @@
 # ecommerce-ops-agent 架构设计 V0.2
 
-本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 于 2026-09-12 获用户明确授权；本轮仅建设数据库与基础设施。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
+本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 的数据库和查询 Service 已落地；Phase 03 增加只读 Business Tools，尚未实现 LangGraph/LLM/RAG。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
 
 ## 1. 目标与业务范围
 
@@ -233,7 +233,7 @@ pgvector 首版从精确向量检索开始；数据量、查询计划和耗时�
 
 - 保持 V0.2 表、外键和首迁移不变；迁移往返在独立空测试库执行。降级保留既有共享扩展及 Alembic 自有版本表，删除业务表、约束和索引。
 - Seed 使用固定业务键和由键派生的 UUID，只补缺失记录，保留已有修改；事务提交由显式开发/测试命令负责，生产环境拒绝执行。知识样例只写 draft 文档，不生成分块/向量，不制造审计日志。
-- 查询 Service 直接使用 SQLAlchemy 并返回 Pydantic 结构，不通过 Agent Tool 或 HTTP 对外开放。商品/库存只展示 active 商品及 active SKU；历史订单继续返回下单快照，不受当前商品下架影响。
+- Phase 02 查询 Service 直接使用 SQLAlchemy 并返回 Pydantic 结构，该阶段未接 Tool 或业务 HTTP。商品/库存只展示 active 商品及 active SKU；历史订单继续返回下单快照，不受当前商品下架影响。
 - 商品查询使用名称字面子串与可选品类过滤、SKU 使用 JSONB 规格包含过滤；无模糊排序、语义检索或新增文本索引。查询输入设长度与条数上限，排序固定以便重复测试。
 - 订单和物流共用服务端权限及归属校验；`orders:read:any` 才能跨用户访问，不从 operator 角色标签推断权限。不存在和不可访问使用同一结构化错误码，订单结果省略完整地址和用户身份字段。
 - 物流查询在包裹授权后仍过滤明细的同订单关系；这只是查询防泄露，不替代未来写事务中的跨订单一致性校验。
@@ -280,19 +280,25 @@ State 中实体候选也不可信；即使模型生成了有效格式的订单 I
 
 ### Tool 合约
 
+Phase 03 已实现下表前六项；`search_after_sales_policy` 留到 RAG 阶段，不在当前 Registry 中。输入见 `app/schemas/tools.py`，固定 Service 适配及白名单见 `app/tools/registry.py`。现阶段订单 Tool 只接受 `order_no`，Service 仍保留双标识能力；没有修改 Phase 02 Service、ORM 或迁移。
+
 | Tool | 模型可提供的主要参数 | 返回内容 |
 |---|---|---|
 | search_products | query、可选品类、有上限的 limit | 商品候选、ID 和摘要 |
 | get_product | product_id | 已授权可见的商品详情 |
 | list_product_skus | product_id、规格筛选 | SKU ID、规格、价格和状态 |
 | get_inventory | sku_id、可选仓库编码 | 可售库存、查询时间 |
-| get_order | order_no 或 order_id，二选一 | 已授权订单状态、金额和明细 |
-| get_logistics | order_no 或 order_id，二选一 | 已授权订单的包裹、商品数量、运单、最新状态和同步时间 |
+| get_order | order_no | 已授权订单状态、金额和明细 |
+| get_logistics | order_no | 已授权订单的包裹、商品数量、运单、最新状态和同步时间 |
 | search_after_sales_policy | query、可选 product_id/category_code/order_id | 适用规则片段、文档/版本/分块 ID、来源与定位 |
 
 工具参数不包含 actor_id 或 permissions。涉及 order_id 的规则查询同样先检查订单归属，规则适用时间由已授权订单记录派生，不直接相信模型给出的日期。
 
-统一结果包含 status、data、sources、queried_at 及可公开的 error。状态区分成功、无结果、拒绝、参数错误、暂时故障；面向未授权用户，订单不存在与无权访问使用不泄露订单存在性的统一说明。每次模型工具调用均有对应结果，包括错误和超限。
+Phase 03 统一 `ToolResult[T]` 包含 status、具体类型的 data、source（工具名）、queried_at、可信 request_id 及可公开的 error。状态为 success、not_found、forbidden、invalid_argument、temporarily_unavailable。商品/SKU 空列表或实体缺失为 not_found；已授权订单无包裹仍为 success；库存缺记录不等于已知零库存。物流保留 synced_at。
+
+`OrderNotAccessible` 对 self 范围调用者一律转为 forbidden，不区分他人订单与不存在订单；只有已有 `orders:read:any` 的上下文可把该异常解释为 not_found。权限与归属仍由 Service 检查，Tool 不额外探测订单存在性。模型参数之外单独传入服务端 RequestContext，所有额外参数拒绝，白名单为不可变显式映射，无动态导入或自动注册。输入/输出 JSON Schema 可通过 `tool_schemas()` 读取。
+
+已识别临时故障转换成固定安全错误，不暴露数据库或输入内容；程序缺陷、非临时数据库错误和错误 Service 输出结构继续抛出，不能标成 invalid_argument 或临时故障。会话由服务端调用方持有并负责关闭/回滚，Tool 不提交事务。未来每次模型工具调用均需对应结果，包括调用预算超限；目前无模型循环或重试器。
 
 设置请求超时、单工具超时、总调用次数和图步数上限；上限不得由模型修改。初版顺序执行；只对明确可重试的临时故障有限重试，权限失败不重试。没有数据不能被解释成系统故障，系统故障也不能伪装成没有订单。
 
@@ -311,7 +317,7 @@ Phase 02 不实现完整 JWT 登录，但可信服务端上下文从工程入口
 3. 查询本人订单要求 orders:read:self，查询条件包含 orders.user_id = actor_id。只有明确授予 orders:read:any 的服务端上下文才可跨用户查询，不能仅凭 operator 文本标签放行。
 4. 物流查询、通过订单派生的售后查询也走相同订单归属检查；不允许从另一条工具路径绕过。
 5. 业务服务重复承担最后的权限检查，不能只在路由或提示词中限制。所有工具使用最小返回字段，默认不向模型输出完整地址、电话等隐私信息。
-6. 工具执行白名单只含七个已设计只读工具；未注册工具、写操作或动态 SQL 一律拒绝。运行时只读查询与迁移/数据导入权限分离。
+6. Phase 03 白名单只含六个已实现只读工具；第七项售后规则检索留待 RAG。未注册工具、写操作或动态 SQL 一律拒绝。运行时只读查询与迁移/数据导入权限分离仍是正式开放前的待实现要求。
 7. 商品描述、检索文档和用户文本均为不可信数据，其中出现的指令不能修改系统权限、工具列表或执行上限。
 8. 设置输入长度、分页上限、参数类型、超时和错误转换。日志脱敏，不记录密钥、完整消息正文和敏感工具结果。
 

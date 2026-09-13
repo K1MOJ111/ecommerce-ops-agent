@@ -8,15 +8,15 @@
 
 ## Current Phase
 
-**Phase 02 completed / awaiting Phase 03**。
+**Phase 03 completed / awaiting Phase 04**。
 
-- Phase 02.1 基础设施/数据库基线已通过审核；Phase 02.2 已按用户授权完成最终回归和 Git 收口。
-- 当前仅等待下一阶段的明确任务；本轮没有开始 Phase 03 或新增功能。
+- Phase 02 已提交为 `6acea32`；本轮从干净工作区开始，按用户授权完成六个只读 Business Tools、Schema、白名单、权限与错误转换测试。
+- Phase 03 本地与容器验证已完成，用户审核通过；本文件随阶段关闭提交保存，提交号见 Git 历史。Phase 04 尚未开始。
 
 ## Confirmed Architecture
 
 - V0.2，单体分层；业务 Service 直接使用 SQLAlchemy，无通用 Repository。
-- 当前仅健康 HTTP 接口；六个查询 Service 尚未接入业务 HTTP 或 Agent Tool。
+- 六个查询 Service 已接入受控只读 Tool；HTTP 仍只有健康接口，没有业务 HTTP 或模型入口。
 - 后续设计为单 Agent、显式 State、有限工具循环；intent 只作观测，不决定权限或路由。可信上下文与模型输出分离。
 - 不增加 Multi-Agent、Redis、消息队列、微服务、前端；Reranker、持久化 checkpoint 留待对应阶段确认。
 
@@ -34,15 +34,16 @@
 | `app/main.py`、`app/api/` | 应用生命周期、依赖、健康接口 |
 | `app/core/config.py`、`security.py` | Settings、不可变 RequestContext |
 | `app/db/base.py`、`session.py`、`models/` | 12 表、Engine、短期 AsyncSession |
-| `app/schemas/commerce.py` | 查询返回的 Pydantic 结构 |
+| `app/schemas/commerce.py`、`tools.py` | Service 返回结构、Tool 输入和类型化 ToolResult |
 | `app/services/catalog.py`、`inventory.py`、`orders.py` | 六个基础查询函数 |
+| `app/tools/registry.py` | 六工具固定白名单、Service 适配、上下文传递、错误转换、Schema 导出 |
 | `scripts/seed_data.py` | 显式开发/测试 Seed 命令 |
 | `migrations/versions/0001_initial_schema.py` | 首迁移，配合 env.py/alembic.ini |
 | `tests/unit/`、`tests/integration/` | 基础、数据库、Seed/Service、迁移测试 |
 | `pyproject.toml`、`requirements.lock`、Docker/Compose 配置 | 工程与运行依赖 |
 | `docs/architecture.md`、`README.md` | 架构细节与可复制命令 |
 
-初始 Git 基线：`b06d86a`，`chore: establish phase 02 infrastructure baseline`。Phase 02 收口提交信息：`feat: complete phase 02 data and query services`，包含 Phase 02.2 的 7 个新文件及 3 个文档修改；本文件随该提交保存，准确提交号见 Git 历史。使用既有 Git 身份，未修改全局配置，未配置远程或推送。`.env`、`.venv`、缓存、IDE/临时/数据库及常见凭据文件被忽略。原 Phase 01 快照已在初始基线中，未再创建副本。
+初始 Git 基线：`b06d86a`；Phase 02 收口：`6acea32 feat: complete phase 02 data and query services`。Phase 03 开始时工作区干净，4 个新文件、3 个文档修改随 `feat: complete phase 03 business tools` 阶段关闭提交纳入版本控制。未修改全局 Git 配置、配置远程或推送。`.env`、`.venv`、缓存、IDE/临时/数据库及常见凭据文件被忽略；历史文档由 Git 保留，不新建重复副本。
 
 ## Data / Storage Design
 
@@ -60,25 +61,29 @@
 - `/health/live` 检查 API 存活；`/health` 有超时地执行 SELECT 1，失败 503，不检查模型或冒充迁移完整性检查。
 - Catalog：`search_products`、`get_product`、`list_product_skus`；Inventory：`get_inventory`。仅展示 active 商品/SKU；无匹配返回 None/空列表，库存缺记录不等于已知零库存。
 - Order：`get_order`、`get_logistics` 共用可信上下文与 SQL 归属检查，订单 ID/编号二选一；只返回结构化数据，省略完整地址/用户身份字段。
+- Tool：`invoke_tool(name, arguments, session=..., context=...)` → 固定白名单 → Pydantic 校验 → Service → `ToolResult[T]`；模型参数与可信 actor_id/permissions/request_id 分离。订单 Tool 只暴露 order_no；调用方负责短期 Session 与异常后回滚/关闭。
 - Seed：显式命令 → 验证 development/test → 按固定键派生 UUID → 只补缺失 → 整轮事务提交；不在生产或应用启动执行。
 
 ## Completed
 
 - Phase 02.1 infrastructure/database baseline：工程、Settings、FastAPI、12 表 ORM、Alembic、Docker 和健康检查完成，并获用户审核通过。
 - Phase 02.2 seed data：64 条确定性模拟记录；本轮再次连续运行两次均新增 0/已有 64，无重复数据。
-- Query services：六个查询 Service、结构化返回、权限/归属及物流时间测试完成；无业务 HTTP 或 Agent Tool。
+- Query services：六个查询 Service、结构化返回、权限/归属及物流时间测试完成；Phase 03 复用，未修改 Service。
 - Migration round-trip verification：专用空库的 upgrade/downgrade/upgrade/current/check 在本次完整回归中重新通过。
-- PostgreSQL integration testing：2026-09-13 本次完整回归 67 项通过，无失败/跳过；依赖、编译、Compose 与健康检查通过。
+- Phase 02 PostgreSQL integration testing：2026-09-13 收口回归 67 项通过；本轮完整回归包含这些既有测试。
 - Git baseline：初始基线 b06d86a 已建立；Phase 02.2 源码、测试与收口文档经范围/凭据检查纳入最终提交，未新增功能。
+- Phase 03 Business Tools：search_products、get_product、list_product_skus、get_inventory、get_order、get_logistics；类型化输入/输出、不可变 Registry、Schema 导出和安全错误转换。
+- Phase 03 验证：新增 102 项单元用例、41 项 PostgreSQL 集成用例；总计 210 项通过，含跨用户拒绝、可信权限矩阵、身份伪造拒绝、真实表锁超时转换及 SELECT-only 检查。当前容器运行环境的六工具冒烟验证通过。
+- Phase 03 阶段关闭：用户审核通过，按授权核对改动范围并保存 Git 提交；未增加功能或进入 Phase 04。
 
 ## In Progress
 
-无。Phase 02 已完成；Phase 03 尚未开始。
+无。Phase 03 已审核通过并关闭，等待 Phase 04 明确任务。
 
 ## Not Started
 
 - 正式认证、数据库运行/迁移角色分离、业务 HTTP 接入和端到端身份测试。
-- Agent Tool、LangGraph、模型客户端、RAG/Embedding、售后规则检索及 Agent Eval。
+- LangGraph、模型客户端、RAG/Embedding、售后规则检索及 Agent Eval。
 - 通用业务写入、退款/取消执行、跨行与并发写规则、HITL、幂等业务操作、业务审计、持久会话。
 
 ## Decisions
@@ -90,6 +95,11 @@
 5. `orders:read:self` 必须附加 actor 归属条件，`orders:read:any` 才能跨用户读取；operator 标签不自动授权。无权限/他人订单/不存在统一 `OrderNotAccessible`，不泄露存在性。
 6. 物流明细另外限制同订单关系，防止异常关联泄露；这不替代未来写入一致性约束。当前身份依赖默认 401，仅接受未来认证层或测试显式注入。
 7. 后续版本交给 Git，不新建 README_v2 等文档副本；按用户授权冻结 Phase 02 源码和验证基线。
+8. Phase 03 只增加受控 Tool 适配，不修改 Service、ORM、首迁移、依赖或认证入口。白名单为显式不可变映射，无插件、自动发现、动态导入或任意函数名执行。
+9. 输入拒绝所有额外字段；字符串长度、UUID、specs 最多 8 项和 limit 1–100 由 Pydantic 校验。category 在调用 Service 时映射为 category_code；不接受模型身份、权限、角色或 SQL。
+10. `ToolResult[T]` 使用 status/data/source/queried_at/request_id/error；成功必须有类型化 data，无 error；失败无 data，仅固定安全错误。商品/SKU 空结果为 not_found，库存 0 与未知库存明确区分；已授权订单无包裹为成功空列表，物流保留 synced_at。
+11. Service 的 `OrderNotAccessible` 保持不变：self 范围下他人/缺失订单一律 forbidden；仅已有可信 orders:read:any 时缺失订单转 not_found。Tool 不探测隐藏订单，不复制 SQL 归属规则。
+12. 参数错误、权限拒绝、无结果、已识别临时数据库/Service 故障分开。代码错误、非临时数据库错误和错误输出结构继续抛出，由未来调用边界处理；不自动重试、不吞掉取消信号、不提交事务。
 
 ## Known Issues
 
@@ -97,31 +107,33 @@
 - Seed 的金额合计、预占、发货/退款范围和时间已检查，但普通 CHECK 不保护任意跨行业务写入；知识发布完整性/版本重叠亦未实现。
 - updated_at 自动更新依赖 SQLAlchemy，直接 SQL 须自行维护；audit_logs 尚无数据库级只追加权限限制。
 - Seed 不恢复手动改过的数据，非并发导入系统；物流和政策是本地模拟资料，未接真实来源。
+- Phase 03 无已知阻断问题。Registry Schema 尚未与具体模型供应商对接；不可把本地 Tool 测试视为 LLM/Agent、正式认证或生产验证。临时数据库异常后，调用方须关闭/回滚 Session，不能继续复用失败事务。
 
 ## Validation Status
 
-最终回归实际执行于 **2026-09-13 17:30:43–17:31:13（Asia/Shanghai，UTC+08:00）**；下表 `python` 指项目 `.venv/Scripts/python.exe`，不是引用 9 月 12 日结果。两个测试库连接通过环境变量显式传入，均为真实 PostgreSQL。
+Phase 03 验证实际执行于 **2026-09-13，17:52（Asia/Shanghai，UTC+08:00）收尾核对**。下表 `python` 指项目 `.venv/Scripts/python.exe`。两个测试库连接通过环境变量显式传入，均为真实 PostgreSQL；以下为本轮结果。
 
 | 本次实际执行 | 真实结果 |
 |---|---|
-| `python -m pytest -q` | **67 passed in 20.22s**；0 failed、0 skipped、无警告；命令退出码 0，17:31:09 结束 |
-| 测试内 upgrade → downgrade → upgrade → current → check | 专用空库往返成功；最终 0001 (head)，无 metadata 漂移，表/约束/索引恢复一致；按既有设计保留共享扩展 |
-| `python -m pip check` | No broken requirements found；退出码 0，17:31:13 结束 |
-| `python -m compileall app scripts tests` | 退出码 0，17:31:13 结束 |
-| `docker compose config --quiet`、`docker compose ps` | 配置通过；API/DB 均 healthy |
-| HTTP `GET /health` | api=ok、database=ok；17:31 再次请求成功 |
-| `python -m scripts.seed_data` 连续两次 | 均 inserted=0、existing=64；17:30:45 完成，无重复新增 |
-| 17:31:50 三库逐表计数和 revision 核对 | 开发库各表数量与 Data / Storage Design 一致，合计 64；两测试库业务表全为 0；三库均 revision 0001 |
-| `git status`、`git diff`、`git diff --staged`、范围及凭据检查 | 初始暂存区为空；仅预期 10 文件变更，未发现本地凭据、临时调试文件、新 backup/v2/final 或 Phase 03 实现 |
-| `git diff --check`、状态文件结构和文档链接检查 | 通过；保留规定的 15 节结构 |
+| `python -m pytest -q` | **210 passed in 42.33s**；0 failed、0 skipped，退出码 0；包含既有 67 项和新增 143 项 |
+| 测试内 upgrade → downgrade → upgrade → current → check | 专用空库往返通过；最终 0001 (head)，无 metadata 漂移；表/约束/索引一致 |
+| 新 Tool PostgreSQL 集成测试 | 41 项通过；含真实 lock_timeout → temporarily_unavailable、6 工具只执行 SELECT、customer/operator 权限及身份伪造边界 |
+| `python -m pip check` | No broken requirements found；退出码 0 |
+| `python -m compileall app tests` | 退出码 0 |
+| `docker compose config --quiet` | 退出码 0；开始时 `docker compose ps` 显示 API/DB healthy |
+| `docker compose run --rm -T --no-deps --volume "${PWD}/app:/app/app:ro" --volume "${PWD}/scripts:/app/scripts:ro" api python -` | 现有 API 镜像只读挂载当前源码，6 工具、Schema、JSON、synced_at 和订单归属冒烟检查通过；查询既有开发 Seed，未执行 Seed 写入 |
+| `git diff --exit-code -- app/services app/db migrations app/core app/schemas/commerce.py pyproject.toml requirements.lock` | 退出码 0，Phase 02 Service、数据模型、迁移、上下文和依赖未修改 |
+| `git diff --check`、文档链接/围栏/状态结构检查 | 通过；保留固定 15 节结构，实现收尾时暂存区为空，变更仅限 4 个新文件和 3 个文档 |
 
-67 项含基础/数据库 40 项、Seed/Service 26 项、迁移往返 1 项。最终收尾未修改业务代码、依赖或数据库设计，未增加 Agent/Tool/LLM/RAG/Embedding 等实现。
+阶段关闭核对：210 项测试通过后未修改代码或测试，仅更新文档；代码最后修改时间均早于 17:52:31 的最终 pytest 缓存，内容与已通过版本一致，因此按用户要求不重复完整 pytest。关闭提交仅含 Phase 03 工具、测试及说明文档，不包含敏感信息、临时文件或 Phase 04 实现。
 
-验证边界：Phase 02.1 容器构建/运行已验证；本轮新 Service 在宿主机虚拟环境与 PostgreSQL 回归，未重新构建镜像。未执行静态类型检查、真实停机演练、生产部署/负载/备份恢复、并发 Seed、正式认证端到端或模型调用测试。此前已恢复的 Docker 启动及临时端口问题不再列为未解决问题。
+初次回归发现测试模块同名收集冲突，以及脱敏测试把固定提示中的 input 一词误判为泄露；已修正测试文件名与断言，最终完整回归通过。没有把初次失败或静态阅读记为通过。
+
+验证边界：本轮未重建或替换长期运行的 API 容器；容器检查使用临时容器只读挂载新源码，不代表新镜像构建/部署验证。未执行静态类型检查、真实停机演练、生产负载/备份恢复、正式认证端到端或模型调用；未实现 LangGraph/LLM/RAG。Data / Storage Design 中三库行数与版本的逐库快照仍为 Phase 02 收口记录。
 
 ## Next Recommended Step
 
-**Phase 03 Business Tools**。仅记录下一阶段方向，具体范围和实施须另有明确任务；本轮停止，不创建 Phase 03 代码。后续开放业务接口前仍需落实正式身份来源和数据库最小权限，不能把 Phase 02 本地验收视为生产就绪。
+**等待 Phase 04 明确任务**。当前 Tool 合约、可信上下文入口和测试具备后续本地编排接入条件；Phase 03 已正式关闭，本轮到此停止。正式身份来源和数据库最小权限仍是开放业务接口前的前置项，不等于生产就绪。
 
 ## Change Log
 
@@ -130,3 +142,5 @@
 - 2026-09-13：按最新项目状态规范整理为 15 节，区分已有验证与恢复时的运行环境变化；未修改业务代码或进入下一阶段。
 
 - 2026-09-13：按用户授权执行最终完整回归，67 项通过；Seed 两次无新增、健康与三库状态正常；冻结并提交 Phase 02，状态为 completed / awaiting Phase 03，未进入下一阶段。
+- 2026-09-13：按授权完成 Phase 03 六个只读 Tools、结构化结果和固定白名单；新增 143 项测试，完整 210 项通过，现有容器环境冒烟检查通过；未改 Phase 02 Service/模型/迁移，未提交或进入 LangGraph。
+- 2026-09-13：用户审核通过 Phase 03；仅做阶段关闭，测试后未修改代码、不重复完整 pytest；以 `feat: complete phase 03 business tools` 提交本阶段改动，状态更新为 completed / awaiting Phase 04，未开始 LangGraph/LLM/RAG。

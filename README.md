@@ -116,3 +116,40 @@ Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、�
 `requirements.lock` 是本轮解析出的直接和传递依赖版本约束快照；安装时配合 `-c` 使用，不包含本地路径或凭据。它不是带哈希的跨平台完整供应链锁文件。运行镜像只安装运行依赖，pytest/httpx 等放在 `test` 可选依赖中。
 
 原有 [Phase 01 快照](docs/history/phase01/PROJECT_STATE.md) 继续保留；后续历史版本统一使用 Git 管理，不再生成重复文档副本。当前进度始终以根目录 PROJECT_STATE.md 为准。
+
+## 只读 Business Tools
+
+`app/tools/registry.py` 的固定白名单包含 `search_products`、`get_product`、`list_product_skus`、`get_inventory`、`get_order`、`get_logistics`。`get_tool(name)` 查找工具，未注册名称抛出 `KeyError`；模型调用统一经过 `invoke_tool`，未注册名称返回 `invalid_argument / unknown_tool`。`tool_schemas()` 返回每个工具的名称、说明、输入 JSON Schema 和具体类型的输出 JSON Schema，尚未绑定任何模型供应商。
+
+```python
+from app.tools.registry import invoke_tool, tool_schemas
+
+schemas = tool_schemas()
+# session 和 context 只能由服务端提供；context 是已认证的 RequestContext。
+result = await invoke_tool(
+    "get_order", {"order_no": "SEED-O001"}, session=session, context=context,
+)
+payload = result.model_dump(mode="json")
+```
+
+| Tool | 参数边界 |
+|---|---|
+| search_products | `query` 1–200 字符，`category` 可选品类编码 1–100 字符，`limit` 1–100，默认 20 |
+| get_product | 必填 `product_id` UUID |
+| list_product_skus | 必填 `product_id` UUID；可选 `specs` 最多 8 项，键 1–64、值 1–100 字符；`limit` 默认 100、范围 1–100 |
+| get_inventory | 必填 `sku_id` UUID；可选 `warehouse_code` 1–100 字符 |
+| get_order / get_logistics | 必填 `order_no` 1–100 字符；当前 Tool 不暴露 `order_id` |
+
+字符串过滤值去除首尾空白；`limit` 不接受布尔值、浮点数或数字字符串。所有额外字段均拒绝，包括 `actor_id`、`permissions`、`request_id`、`role`、`context` 和 `sql`。`category` 仅在适配 Service 时转换为 `category_code`。
+
+统一 `ToolResult[T]` 包含 `status`、具体类型的 `data`、工具名 `source`、UTC `queried_at`、可信 `request_id` 和安全 `error {code, message}`。成功有 data、无 error；失败 data 为 null，并携带 error，不回显原始输入、SQL 或数据库异常。
+
+- 商品/库存实体缺失或不可展示、商品/SKU 搜索空列表：`not_found`。
+- 库存 0：`success` 且 `available=0`；缺仓库记录：`success` 且 `stocks=[]`，表示未知，不能解读成 0。
+- 已授权订单无物流：`success` 且 `packages=[]`；物流保留每个包裹的 `synced_at`，外层查询时间沿用 Service 的查询时间。
+- 订单 Service 始终执行授权。customer/self 范围下，他人订单和不存在订单均为 `forbidden`，不泄露存在性；可信 `orders:read:any` 范围下的缺失订单为 `not_found`。operator 标签不授权。
+- 参数校验和 Service 参数错误：`invalid_argument`；连接/连接池/命令超时、断连及已识别 PostgreSQL 临时故障：`temporarily_unavailable`。代码错误、非临时数据库错误和错误输出结构继续抛出，由未来调用边界处理，不伪装成可重试故障。
+
+Tool 不创建或提交事务，不重写 SQL/业务规则。调用方按查询创建短期 AsyncSession，异常后关闭/回滚该会话，不在失败事务上继续查询；现有 Engine 的连接、命令和连接池超时仍生效。当前没有自动重试、LLM、LangGraph、RAG 或新增业务 HTTP 接口，正式认证仍默认拒绝。
+
+单元测试可运行 `.venv/Scripts/python.exe -m pytest -q tests/unit/test_tool_contracts.py`。完整 PostgreSQL 测试使用前文两个测试库环境变量执行 `pytest -q`；包含真实表锁等待超时转换和六工具只执行 SELECT 的检查。依赖、编译及 Compose 验证命令为 `python -m pip check`、`python -m compileall app tests`、`docker compose config --quiet`。
