@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-> 更新：2026-09-13。先读本文件，再按任务读 [架构](docs/architecture.md)、[运行说明](README.md) 和相关代码。最新用户指令、已验证实际状态优先于本摘要；发现冲突须指出并同步。历史使用 Git，不新建重复文档备份。
+> 更新：2026-09-14。先读本文件，再按任务读 [架构](docs/architecture.md)、[运行说明](README.md) 和相关代码。最新用户指令、已验证实际状态优先于本摘要；发现冲突须指出并同步。历史使用 Git，不新建重复文档备份。
 
 ## Project Goal
 
@@ -8,24 +8,29 @@
 
 ## Current Phase
 
-**Phase 03 completed / awaiting Phase 04**。
+**Phase 04 completed / awaiting Phase 05**。
 
-- Phase 02 已提交为 `6acea32`；本轮从干净工作区开始，按用户授权完成六个只读 Business Tools、Schema、白名单、权限与错误转换测试。
-- Phase 03 本地与容器验证已完成，用户审核通过；本文件随阶段关闭提交保存，提交号见 Git 历史。Phase 04 尚未开始。
+- Phase 03 基线为 `0090e3b`，进入本阶段时 Git 工作区干净；以当前项目文件和源码核对进度。
+- LangGraph Read-only Agent Core 的本地完整回归和独立容器检查通过，用户已审核通过；本文件随阶段关闭提交保存，提交号见 Git 历史。
+- Phase 04 正式关闭；Phase 05 尚未开始，等待明确任务，不自动进入 RAG 或后续阶段。
 
 ## Confirmed Architecture
 
-- V0.2，单体分层；业务 Service 直接使用 SQLAlchemy，无通用 Repository。
-- 六个查询 Service 已接入受控只读 Tool；HTTP 仍只有健康接口，没有业务 HTTP 或模型入口。
-- 后续设计为单 Agent、显式 State、有限工具循环；intent 只作观测，不决定权限或路由。可信上下文与模型输出分离。
-- 不增加 Multi-Agent、Redis、消息队列、微服务、前端；Reranker、持久化 checkpoint 留待对应阶段确认。
+- 沿用 V0.2 单体分层，Service 直接使用 SQLAlchemy，无通用 Repository；Service/Tool/ORM/迁移及可信 RequestContext 未改。
+- 真实 LangGraph 单 Agent：START → plan → execute_tools/answer/clarify/reject；工具分支有界返回 plan，终结节点到 END。
+- plan 通过可替换 Model 读取用户消息与工具结果，提出原生 Tool Calls 或类型化终结动作。执行只能走原六工具 Registry。
+- State 不含 Session、客户端或可信身份；AgentContext 通过 LangGraph runtime context 注入身份、Model、Session 工厂与 Settings。
+- answer 使用模型选择的成功证据编号，由代码引用完整 Tool data，不接受模型提供的事实值；追问/拒绝使用受控类型。
+- HTTP 仍只有健康接口，正式身份依赖默认拒绝；无业务 HTTP、RAG、HITL、checkpoint、写操作、前端或 Multi-Agent。
 
 ## Confirmed Tech Stack
 
-- 已验证：本地 Python 3.12.9；FastAPI 0.141.1、Uvicorn 0.52.4、SQLAlchemy 2.0.52、asyncpg 0.31.0、Alembic 1.20.0、Pydantic 2.13.5、pydantic-settings 2.15.0、pgvector Python 0.5.0。
-- PostgreSQL 镜像 `pgvector/pgvector:0.8.2-pg17`；上次实查 PostgreSQL 17.10、vector 0.8.2、pg_trgm 1.6。
-- pytest 9.1.1、pytest-asyncio 1.4.0、httpx 0.28.1；Docker Compose 仅 API/DB，端口只绑定本机，API 非 root 运行。
-- `requirements.lock` 固定已验证依赖版本，不是带哈希的完整跨平台锁文件。本小步未改依赖、ORM 或迁移；未安装 LangGraph/模型调用依赖。
+- 本地 Python 3.12.9；FastAPI 0.141.1、Uvicorn 0.52.4、SQLAlchemy 2.0.52、asyncpg 0.31.0、Alembic 1.20.0、Pydantic 2.13.5、pydantic-settings 2.15.0、pgvector Python 0.5.0。
+- Phase 04 新增 LangGraph 1.2.11；传递依赖 langchain-core 1.6.3。复用 httpx 0.28.1 并列入运行依赖，无供应商 SDK。
+- PostgreSQL 镜像 `pgvector/pgvector:0.8.2-pg17`；Phase 02 实查 PostgreSQL 17.10、vector 0.8.2、pg_trgm 1.6。本轮在现有 PostgreSQL 执行测试，未升级数据库。
+- pytest 9.1.1、pytest-asyncio 1.4.0；Docker Compose 仅 API/DB，本机端口，非 root API。
+- `requirements.lock` 更新为当前直接/传递依赖固定版本快照；本地 pip check、独立 Linux 镜像安装及 pip check 通过，不是带哈希的跨平台锁。
+- langgraph-checkpoint 等包是 LangGraph 传递依赖，项目没有配置 checkpointer 或持久化会话。
 
 ## Repository Structure
 
@@ -37,6 +42,8 @@
 | `app/schemas/commerce.py`、`tools.py` | Service 返回结构、Tool 输入和类型化 ToolResult |
 | `app/services/catalog.py`、`inventory.py`、`orders.py` | 六个基础查询函数 |
 | `app/tools/registry.py` | 六工具固定白名单、Service 适配、上下文传递、错误转换、Schema 导出 |
+| `app/agent/llm.py`、`state.py`、`graph.py` | 模型协议/Adapter、类型化 State、真实 LangGraph 和证据约束回答 |
+| `scripts/agent_smoke.py` | Fake Model + 真实图/工具/数据库，只读开发 Seed 冒烟 |
 | `scripts/seed_data.py` | 显式开发/测试 Seed 命令 |
 | `migrations/versions/0001_initial_schema.py` | 首迁移，配合 env.py/alembic.ini |
 | `tests/unit/`、`tests/integration/` | 基础、数据库、Seed/Service、迁移测试 |
@@ -57,12 +64,14 @@
 
 ## Core Workflows
 
-- 应用 lifespan 管理 Engine/sessionmaker；每次依赖创建并关闭独立 AsyncSession，不共享全局 Session、不在启动 create_all、不自动提交业务事务。
-- `/health/live` 检查 API 存活；`/health` 有超时地执行 SELECT 1，失败 503，不检查模型或冒充迁移完整性检查。
-- Catalog：`search_products`、`get_product`、`list_product_skus`；Inventory：`get_inventory`。仅展示 active 商品/SKU；无匹配返回 None/空列表，库存缺记录不等于已知零库存。
-- Order：`get_order`、`get_logistics` 共用可信上下文与 SQL 归属检查，订单 ID/编号二选一；只返回结构化数据，省略完整地址/用户身份字段。
-- Tool：`invoke_tool(name, arguments, session=..., context=...)` → 固定白名单 → Pydantic 校验 → Service → `ToolResult[T]`；模型参数与可信 actor_id/permissions/request_id 分离。订单 Tool 只暴露 order_no；调用方负责短期 Session 与异常后回滚/关闭。
-- Seed：显式命令 → 验证 development/test → 按固定键派生 UUID → 只补缺失 → 整轮事务提交；不在生产或应用启动执行。
+- 应用 lifespan 管理 Engine/sessionmaker；健康接口保持原状，SELECT 1 失败返回 503。
+- `run_agent(message, context=AgentContext(...))` 只接受用户文本和服务端上下文，每次新建空 State；不接受客户端提交的 State、角色消息或 evidence。
+- plan → Model.complete(messages, tools) → 原生 Tool Calls / 已校验 Decision。OpenAICompatibleModel 用 Settings 中 LLM_* 发 Chat Completions 请求；Fake Model 可替换。
+- execute_tools → 每调用独立 AsyncSession → 原 invoke_tool → Pydantic 输入校验 → Service SQL/授权 → 原 ToolResult；不提交事务，结束关闭/回滚。非法/未知调用也计入工具尝试预算。
+- Tool Results 含证据编号回传模型，成功数据与全部失败记录保存在 State。answer 仅呈现合法成功引用及强制失败提示；不从历史文本或模型字段补业务事实。
+- 默认工具最多 8 次、图最多 24 步、单模型 30 秒、整请求 90 秒。达到工具上限后允许一次无工具模型汇总；超额不执行。整请求超时/图步数耗尽保留部分证据并补中断 Tool 消息，代码错误和主动取消继续传播。
+- 商品/SKU 空列表为 not_found；库存缺记录未知而非零；已授权订单空包裹为成功空列表。self 范围他人/不存在订单同为 forbidden，orders:read:any 才能跨用户或区分缺失。
+- Seed 仍为显式 development/test 命令，固定键只补缺失；本阶段冒烟只读现有 Seed，未重新导入或修改开发业务数据。
 
 ## Completed
 
@@ -76,15 +85,20 @@
 - Phase 03 验证：新增 102 项单元用例、41 项 PostgreSQL 集成用例；总计 210 项通过，含跨用户拒绝、可信权限矩阵、身份伪造拒绝、真实表锁超时转换及 SELECT-only 检查。当前容器运行环境的六工具冒烟验证通过。
 - Phase 03 阶段关闭：用户审核通过，按授权核对改动范围并保存 Git 提交；未增加功能或进入 Phase 04。
 
+- Phase 04 Agent Core：可替换 OpenAI-compatible Adapter、真实 LangGraph、最小 State、可信 Runtime Context、顺序多 Tool 调用、有限循环、受控 answer/clarify/reject。
+- Phase 04 验证：新增 85 项用例，完整 295 项通过；本地与独立新镜像内 Agent 六工具冒烟通过，无 live LLM 调用。
+- Phase 04 阶段关闭：用户审核通过；核对改动、凭据与范围后按授权提交，未增加功能。
+
 ## In Progress
 
-无。Phase 03 已审核通过并关闭，等待 Phase 04 明确任务。
+无。Phase 04 已审核通过并关闭，等待 Phase 05 明确任务。
 
 ## Not Started
 
 - 正式认证、数据库运行/迁移角色分离、业务 HTTP 接入和端到端身份测试。
-- LangGraph、模型客户端、RAG/Embedding、售后规则检索及 Agent Eval。
-- 通用业务写入、退款/取消执行、跨行与并发写规则、HITL、幂等业务操作、业务审计、持久会话。
+- RAG/Embedding、售后规则检索、真实模型业务质量 Eval；没有 Reranker。
+- 通用写入、退款/取消执行、并发写规则、HITL、幂等操作、业务审计、checkpoint/持久会话。
+- 真实 LLM smoke test：本地未配置 LLM_API_KEY，本阶段未执行。
 
 ## Decisions
 
@@ -101,39 +115,60 @@
 11. Service 的 `OrderNotAccessible` 保持不变：self 范围下他人/缺失订单一律 forbidden；仅已有可信 orders:read:any 时缺失订单转 not_found。Tool 不探测隐藏订单，不复制 SQL 归属规则。
 12. 参数错误、权限拒绝、无结果、已识别临时数据库/Service 故障分开。代码错误、非临时数据库错误和错误输出结构继续抛出，由未来调用边界处理；不自动重试、不吞掉取消信号、不提交事务。
 
+13. Phase 04 删除重复的 resolved_entities，新增实际路由所需 Decision；messages 保留调用上下文，Evidence 保存带编号的原 ToolResult。
+14. 用已有 httpx 实现 Chat Completions Adapter，不增加供应商 SDK；仅新增 LangGraph 及必要传递依赖。Model Protocol 支持 Fake Model，测试不依赖外部 API。
+15. 业务事实采用模型选择证据、代码引用完整 data 的受控输出；不以提示词或单独的“有引用”标记作为事实保证。受控问题/拒绝类型阻止自由文案绕过。
+16. 每工具独立 Session；预算计入非法/未知调用。超额、图步数、模型和整请求超时分别记录，保留已完成证据；程序缺陷和主动取消不伪装成临时故障。
+17. 不新增自动重试器、HTTP 业务入口、RAG/HITL/checkpoint 或写操作。新镜像只用于临时验证，现有运行服务未部署更新。
+
 ## Known Issues
 
-- 正式认证和运行数据库最小权限尚未落实；不得将内部 Service 当作可直接公网开放的业务接口。
-- Seed 的金额合计、预占、发货/退款范围和时间已检查，但普通 CHECK 不保护任意跨行业务写入；知识发布完整性/版本重叠亦未实现。
-- updated_at 自动更新依赖 SQLAlchemy，直接 SQL 须自行维护；audit_logs 尚无数据库级只追加权限限制。
-- Seed 不恢复手动改过的数据，非并发导入系统；物流和政策是本地模拟资料，未接真实来源。
-- Phase 03 无已知阻断问题。Registry Schema 尚未与具体模型供应商对接；不可把本地 Tool 测试视为 LLM/Agent、正式认证或生产验证。临时数据库异常后，调用方须关闭/回滚 Session，不能继续复用失败事务。
+- 无已知阻断本阶段验收的故障；正式认证和数据库最小权限仍未落实，不可将内部 Agent 当作公网业务接口。
+- 未执行 live LLM smoke test：本地未配置 LLM_API_KEY。HTTP Mock 验证协议不等于具体供应商/模型兼容或选工具能力验证。
+- live LLM compatibility / tool-selection quality / language experience 尚未真实验证。
+- 回答是保守的完整证据引用，可能较长；能保证呈现的业务数据来自 Tool Result，不能保证模型选中了最相关对象、所需查询或最佳追问。`status=ok` 只表示所引用查询成功，不等于已完整解决用户语义需求。
+- 单次用户文本入口不自动续聊；追问后需附带必要查询上下文，业务数据重新查询。无 checkpoint/恢复和会话归属实现。
+- 沿用历史限制：Seed 非并发导入器；物流/政策样例是模拟数据；跨行写约束、直接 SQL updated_at、知识发布完整性和审计只追加权限仍待后续阶段。
+- 超时依赖 asyncio 协作取消及原数据库驱动边界，不是强制终止任意同步阻塞代码的进程沙箱；本轮已测试模型等待、工具等待、部分结果保留和 Session 关闭。
+- 原 API 容器未替换；容器验证使用独立构建镜像和临时容器，不等于部署。
 
 ## Validation Status
 
-Phase 03 验证实际执行于 **2026-09-13，17:52（Asia/Shanghai，UTC+08:00）收尾核对**。下表 `python` 指项目 `.venv/Scripts/python.exe`。两个测试库连接通过环境变量显式传入，均为真实 PostgreSQL；以下为本轮结果。
+Phase 04 实际验证完成于 **2026-09-14（Asia/Shanghai）**。以下 `python` 指项目 `.venv/Scripts/python.exe`，全部是本轮结果。
 
-| 本次实际执行 | 真实结果 |
+| 实际执行 | 真实结果 |
 |---|---|
-| `python -m pytest -q` | **210 passed in 42.33s**；0 failed、0 skipped，退出码 0；包含既有 67 项和新增 143 项 |
-| 测试内 upgrade → downgrade → upgrade → current → check | 专用空库往返通过；最终 0001 (head)，无 metadata 漂移；表/约束/索引一致 |
-| 新 Tool PostgreSQL 集成测试 | 41 项通过；含真实 lock_timeout → temporarily_unavailable、6 工具只执行 SELECT、customer/operator 权限及身份伪造边界 |
-| `python -m pip check` | No broken requirements found；退出码 0 |
+| `python -m pytest -q` | **295 passed in 53.24s**，0 failed、0 skipped；原 210 项 + 新 69 项单元/Adapter 和 16 项 PostgreSQL Agent 集成用例 |
+| Fake Model / MockTransport | 商品、SKU、库存连续调用；订单/物流；self/operator 权限；身份伪造；clarify/reject；多工具；五种 Tool 状态；超时/图步数/工具预算；无限循环中止；无证据/伪造证据/自由答案拦截；并发请求隔离；错误传播及取消 |
+| PostgreSQL Agent 集成 | 动态使用上轮真实结果中的 ID 查询；六工具只执行 SELECT（另有测试 SAVEPOINT）；表锁超时转换后新 Session 恢复；真实 Adapter + Mock HTTP + Graph + Registry + PostgreSQL 往返 |
+| 测试内迁移 upgrade/downgrade/upgrade/current/check | 专用空 `ecommerce_ops_migration_test` 往返通过，0001 head，约束/索引一致；普通集成使用 `ecommerce_ops_test` 外层回滚 |
+| `python -m pip check` | No broken requirements found，退出码 0 |
 | `python -m compileall app tests` | 退出码 0 |
-| `docker compose config --quiet` | 退出码 0；开始时 `docker compose ps` 显示 API/DB healthy |
-| `docker compose run --rm -T --no-deps --volume "${PWD}/app:/app/app:ro" --volume "${PWD}/scripts:/app/scripts:ro" api python -` | 现有 API 镜像只读挂载当前源码，6 工具、Schema、JSON、synced_at 和订单归属冒烟检查通过；查询既有开发 Seed，未执行 Seed 写入 |
-| `git diff --exit-code -- app/services app/db migrations app/core app/schemas/commerce.py pyproject.toml requirements.lock` | 退出码 0，Phase 02 Service、数据模型、迁移、上下文和依赖未修改 |
-| `git diff --check`、文档链接/围栏/状态结构检查 | 通过；保留固定 15 节结构，实现收尾时暂存区为空，变更仅限 4 个新文件和 3 个文档 |
+| `docker compose config --quiet` | 退出码 0 |
+| `git diff --check` | 通过；Git 仅提示 Windows 换行归一化，不是空白错误 |
+| `git diff --exit-code -- app/services app/tools app/db app/schemas app/core/security.py migrations` | 退出码 0，数据库、Service、Tool Layer 和可信身份合约未改 |
+| `python -m scripts.agent_smoke` | 本地真实 LangGraph + Registry + PostgreSQL + Fake Model，六工具通过，只读现有开发 Seed |
+| `docker build -t ecommerce-ops-agent:phase04-check .` | Linux 独立镜像构建成功；没有替换运行中的 API/DB |
+| 容器内 `python -m scripts.agent_smoke` | 新镜像内相同 Agent 六工具冒烟通过 |
+| `docker run --rm ecommerce-ops-agent:phase04-check python -m pip check` | No broken requirements found |
+| live LLM smoke test | **未执行**；没有配置 LLM_API_KEY，不视作失败或通过 |
 
-阶段关闭核对：210 项测试通过后未修改代码或测试，仅更新文档；代码最后修改时间均早于 17:52:31 的最终 pytest 缓存，内容与已通过版本一致，因此按用户要求不重复完整 pytest。关闭提交仅含 Phase 03 工具、测试及说明文档，不包含敏感信息、临时文件或 Phase 04 实现。
+完整回归前，在本次子进程环境中从 Settings 安全派生 TEST_DATABASE_URL 和 MIGRATION_DATABASE_URL，不输出凭据，目标分别为既有两个独立测试库；命令见 README 的完整回归段落。
 
-初次回归发现测试模块同名收集冲突，以及脱敏测试把固定提示中的 input 一词误判为泄露；已修正测试文件名与断言，最终完整回归通过。没有把初次失败或静态阅读记为通过。
+容器冒烟实际命令：
 
-验证边界：本轮未重建或替换长期运行的 API 容器；容器检查使用临时容器只读挂载新源码，不代表新镜像构建/部署验证。未执行静态类型检查、真实停机演练、生产负载/备份恢复、正式认证端到端或模型调用；未实现 LangGraph/LLM/RAG。Data / Storage Design 中三库行数与版本的逐库快照仍为 Phase 02 收口记录。
+```powershell
+# DATABASE_URL 在此子进程中从 Settings 安全派生为 db:5432，结束后恢复原环境。
+docker run --rm --network ecommerce-ops-agent_default --env-file .env -e DATABASE_URL --volume "${PWD}/scripts:/app/scripts:ro" ecommerce-ops-agent:phase04-check python -m scripts.agent_smoke
+```
+
+未执行静态类型检查、真实模型 Eval、生产负载、正式认证端到端或部署验证。自动化通过不代表生产就绪。
+
+阶段关闭核对：295 passed 后未修改 Python 实现、测试或冒烟脚本，仅更新说明文档与状态。当前全部 app Python 文件与此前验证镜像逐文件内容一致；代码、测试及冒烟脚本修改时间均早于最终 pytest 缓存（295 项）。因此按用户要求不重复完整测试。待提交文件仅 15 个 Phase 04 文件；未发现本地凭据值、常见密钥模式、临时调试文件或提前实现的 RAG/HITL/checkpoint/业务写操作。原 Service、Tool、ORM、Schema、迁移和可信身份合约未改。
 
 ## Next Recommended Step
 
-**等待 Phase 04 明确任务**。当前 Tool 合约、可信上下文入口和测试具备后续本地编排接入条件；Phase 03 已正式关闭，本轮到此停止。正式身份来源和数据库最小权限仍是开放业务接口前的前置项，不等于生产就绪。
+**等待 Phase 05 明确任务**。Phase 04 已获用户审核并正式关闭，具备下一阶段设计基础；本轮到此停止，不实现 RAG、Embedding、HITL、checkpoint 或业务写操作，不发布或部署。
 
 ## Change Log
 
@@ -144,3 +179,7 @@ Phase 03 验证实际执行于 **2026-09-13，17:52（Asia/Shanghai，UTC+08:00�
 - 2026-09-13：按用户授权执行最终完整回归，67 项通过；Seed 两次无新增、健康与三库状态正常；冻结并提交 Phase 02，状态为 completed / awaiting Phase 03，未进入下一阶段。
 - 2026-09-13：按授权完成 Phase 03 六个只读 Tools、结构化结果和固定白名单；新增 143 项测试，完整 210 项通过，现有容器环境冒烟检查通过；未改 Phase 02 Service/模型/迁移，未提交或进入 LangGraph。
 - 2026-09-13：用户审核通过 Phase 03；仅做阶段关闭，测试后未修改代码、不重复完整 pytest；以 `feat: complete phase 03 business tools` 提交本阶段改动，状态更新为 completed / awaiting Phase 04，未开始 LangGraph/LLM/RAG。
+
+- 2026-09-14：完成 Phase 04 Read-only LangGraph Agent Core；新增 85 项测试，完整 295 项通过，本地和独立容器六工具冒烟通过；未配置真实 LLM，未执行 live smoke；更新架构/README，工作区待用户审核，停止在本阶段。
+
+- 2026-09-14：用户审核通过 Phase 04；仅更新阶段关闭状态并按授权以 `feat: complete phase 04 langgraph agent core` 提交。295 passed 后实现代码未变，不重复完整 pytest；状态为 completed / awaiting Phase 05，后续阶段未开始。

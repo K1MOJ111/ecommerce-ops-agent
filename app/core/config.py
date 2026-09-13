@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     embedding_model: str | None = None
     embedding_dim: int | None = Field(default=None, gt=0)
     agent_max_tool_calls: int = Field(default=8, gt=0)
+    agent_max_graph_steps: int = Field(default=24, gt=0)
+    agent_timeout_seconds: float = Field(default=90, gt=0, allow_inf_nan=False)
     rag_top_k: int = Field(default=5, gt=0)
 
     @field_validator("embedding_dim", mode="before")

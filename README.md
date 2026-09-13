@@ -113,7 +113,7 @@ Remove-Item Env:\TEST_DATABASE_URL,Env:\MIGRATION_DATABASE_URL
 
 Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、不生成自然语言、不依赖 Agent/LLM。不新增业务 HTTP 路由，现有可信身份依赖仍默认拒绝。正式认证和运行数据库最小权限仍是对外开放业务前的前置项。
 
-`requirements.lock` 是本轮解析出的直接和传递依赖版本约束快照；安装时配合 `-c` 使用，不包含本地路径或凭据。它不是带哈希的跨平台完整供应链锁文件。运行镜像只安装运行依赖，pytest/httpx 等放在 `test` 可选依赖中。
+`requirements.lock` 是本轮解析出的直接和传递依赖版本约束快照；安装时配合 `-c` 使用，不包含本地路径或凭据。它不是带哈希的跨平台完整供应链锁文件。运行镜像只安装运行依赖；httpx 用于模型 Adapter，pytest 等放在 `test` 可选依赖中。
 
 原有 [Phase 01 快照](docs/history/phase01/PROJECT_STATE.md) 继续保留；后续历史版本统一使用 Git 管理，不再生成重复文档副本。当前进度始终以根目录 PROJECT_STATE.md 为准。
 
@@ -150,6 +150,49 @@ payload = result.model_dump(mode="json")
 - 订单 Service 始终执行授权。customer/self 范围下，他人订单和不存在订单均为 `forbidden`，不泄露存在性；可信 `orders:read:any` 范围下的缺失订单为 `not_found`。operator 标签不授权。
 - 参数校验和 Service 参数错误：`invalid_argument`；连接/连接池/命令超时、断连及已识别 PostgreSQL 临时故障：`temporarily_unavailable`。代码错误、非临时数据库错误和错误输出结构继续抛出，由未来调用边界处理，不伪装成可重试故障。
 
-Tool 不创建或提交事务，不重写 SQL/业务规则。调用方按查询创建短期 AsyncSession，异常后关闭/回滚该会话，不在失败事务上继续查询；现有 Engine 的连接、命令和连接池超时仍生效。当前没有自动重试、LLM、LangGraph、RAG 或新增业务 HTTP 接口，正式认证仍默认拒绝。
+Tool 不创建或提交事务，不重写 SQL/业务规则。Phase 04 Agent 按查询创建短期 AsyncSession，异常后关闭/回滚该会话，不在失败事务上继续查询；现有 Engine 的连接、命令和连接池超时仍生效。没有自动重试器、RAG 或新增业务 HTTP 接口，正式认证仍默认拒绝。
 
 单元测试可运行 `.venv/Scripts/python.exe -m pytest -q tests/unit/test_tool_contracts.py`。完整 PostgreSQL 测试使用前文两个测试库环境变量执行 `pytest -q`；包含真实表锁等待超时转换和六工具只执行 SELECT 的检查。依赖、编译及 Compose 验证命令为 `python -m pip check`、`python -m compileall app tests`、`docker compose config --quiet`。
+
+## LangGraph Read-only Agent Core
+
+内部入口是 `app.agent.graph.run_agent(message, context=...)`，返回类型化 State；用户可见结果在 `state["final_response"]`。调用方只能提交一条用户文本，不能提交 State、Tool evidence 或任意 role 消息；追问后的新请求应附上必要的原始查询内容，实时数据重新查询。
+
+```python
+from app.agent.graph import AgentContext, run_agent
+from app.agent.llm import OpenAICompatibleModel
+from app.core.config import Settings
+from app.db.session import create_session_factory
+
+# engine 和 request_context 由服务端生命周期/可信身份层提供。
+settings = Settings()
+state = await run_agent(
+    "查询订单 SEED-O001 的状态",
+    context=AgentContext(
+        request_context, OpenAICompatibleModel(settings),
+        create_session_factory(engine), settings,
+    ),
+)
+response = state["final_response"]
+```
+
+真实调用要求已有 `LLM_BASE_URL`（API 根路径，如带 `/v1`，不带 `/chat/completions`）、`LLM_API_KEY`、`LLM_MODEL`。缺配置不是自动化测试失败，也不会自动创建密钥。Adapter 使用 [OpenAI Chat Completions 合约](https://developers.openai.com/api/reference/resources/chat)，通过 HTTP Mock 验证消息、Tool Schema、结果关联、超时和错误转换；兼容供应商仍需支持原生 function tool_calls 和终结 JSON 指令。
+
+图结构为 START → plan → execute_tools/answer/clarify/reject → END；工具分支可回 plan。采用 [LangGraph Runtime Context 与图步数限制](https://docs.langchain.com/oss/python/langgraph/graph-api)。`AGENT_MAX_TOOL_CALLS=8`、`AGENT_MAX_GRAPH_STEPS=24`、`AGENT_TIMEOUT_SECONDS=90`，单次模型 `LLM_TIMEOUT_SECONDS=30`；超额工具不执行，图步数/整请求超时会返回已有的部分证据。取消信号、代码缺陷继续向上传播。
+
+模型终结输出示例：`{"action":"answer","evidence_ids":[1,2]}`、`{"action":"clarify","question":"size"}`、`{"action":"reject","reason":"write_operation"}`。问题类型为 product/sku/color/size/order/query；拒绝原因是 write_operation/policy_unavailable/unsupported。问题和拒绝文案由代码控制，intent 可选且不参与路由或授权。
+
+回答直接引用所选成功 Tool Result 的完整 data，带来源和查询时间；不把模型生成的数字、状态、自由答案或用户自述当作证据。错误结果强制返回，部分成功为 partial，无证据为 unconfirmed；forbidden 不揭示存在性，空库存不解释为 0，物流保留同步时间。该保守模式可能较长，尚未验证真实模型的对象选择、问题相关性和语言体验。
+
+自动化测试全部使用 Fake Model 或 httpx MockTransport；数据库仍为真实 PostgreSQL。测试入口：
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q tests/unit/test_agent_core.py tests/unit/test_llm_adapter.py
+# 完整回归先按前文设置 TEST_DATABASE_URL 和 MIGRATION_DATABASE_URL。
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m scripts.agent_smoke
+```
+
+`scripts.agent_smoke` 使用 Fake Model 读取已有开发 Seed，不运行 Seed、不调用外部模型。若缺少开发样例则断言失败。容器检查使用独立镜像 `ecommerce-ops-agent:phase04-check` 和临时容器，不替换已有 API。具体已运行命令见 PROJECT_STATE.md。
+
+LangGraph 带入 checkpoint 包是依赖关系，本项目没有启用 checkpointer、保存会话或新增相关表；也没有 RAG/HITL/写操作。

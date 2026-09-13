@@ -1,6 +1,6 @@
 # ecommerce-ops-agent 架构设计 V0.2
 
-本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 的数据库和查询 Service 已落地；Phase 03 增加只读 Business Tools，尚未实现 LangGraph/LLM/RAG。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
+本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core 已落地；RAG/HITL/持久化会话/写操作仍未实现。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
 
 ## 1. 目标与业务范围
 
@@ -271,12 +271,24 @@ flowchart TD
 
 | 类别 | 字段与类型意图 |
 |---|---|
-| State | messages：类型化消息序列；intent：可空观测标签；resolved_entities：类型化商品/SKU/订单候选；evidence：结构化结果列表；tool_call_count：整数；errors：类型化错误列表；final_response：可空响应模型 |
-| 服务端上下文 | actor_id：UUID；permissions：不可变权限集合；request_id：UUID；另含截止时间与服务依赖 |
+| State | messages：类型化消息序列；intent：可空观测标签；evidence：Evidence 列表；tool_call_count：整数；errors：AgentError 列表；decision：已校验的终结动作或 null；final_response：FinalResponse 或 null |
+| 服务端上下文 | AgentContext：不可变 RequestContext（actor_id/permissions/request_id）、Model、短期 Session 工厂、Settings；截止时间由 run_agent 的 asyncio.timeout 管理 |
 
 intent 仅用于可观测性、日志和未来 Eval，不驱动权限、安全决策、工具授权或流程路由。改变 intent 而不改变真实上下文与工具参数，不应改变授权结果。
 
-State 中实体候选也不可信；即使模型生成了有效格式的订单 ID，业务服务仍须校验归属。身份与权限不从 State、用户消息或工具参数回填。数据库会话、客户端和密钥不作为可持久化 State 字段。
+Phase 04 删除旧设计中的 resolved_entities：候选实体已经包含在 Tool Result 和消息里，单独维护会重复且可能失配。decision 是真实路由需要的类型化动作，不替代授权；模型提供的实体标识仍须经过业务服务检查。身份与权限不从 State、用户消息或工具参数回填。数据库会话、客户端和密钥不作为可持久化 State 字段。
+
+### Phase 04 实现合约
+
+- `app/agent/llm.py`：Model Protocol 与 OpenAICompatibleModel，使用现有 httpx 发 Chat Completions 请求。LLM_BASE_URL/API_KEY/MODEL/TIMEOUT_SECONDS 均来自 Settings，不硬编码供应商；缺配置返回 llm_not_configured。无自动重试、重定向或真实 API 测试依赖。
+- `app/agent/state.py`：TypedDict State 和 Pydantic Decision/Evidence/FinalResponse；Evidence 保存服务端编号、tool_call_id、原 ToolResult。模型只能选择本次成功证据编号，不能提供事实值或自由答案。终结 JSON 由本地 Schema 校验，错误输出不会作为自然语言直通。
+- `app/agent/graph.py`：真实 StateGraph，START → plan → execute_tools/clarify/reject/answer；execute_tools 顺序执行并回 plan。超额调用转 answer，未注册调用经 Registry 返回 unknown_tool 后转 reject。三个终结分支均通往 END。
+- plan 通过协议消息读取用户请求与此前工具结果；模型自行选择工具及参数。达到调用上限后仍允许最后一次模型汇总，此时不提供工具；若仍生成调用，每个调用返回 tool_call_limit，不再进入 Service。
+- 默认最多 8 次工具尝试、24 个图步骤、单模型请求 30 秒、整请求 90 秒；分别由 AGENT_MAX_TOOL_CALLS、AGENT_MAX_GRAPH_STEPS、LLM_TIMEOUT_SECONDS、AGENT_TIMEOUT_SECONDS 配置。非法/未知工具尝试也计数，批量请求逐项检查；数据库沿用原连接/池/命令的 3 秒边界。
+- AgentContext 通过 LangGraph 的 context_schema/runtime.context 传递，模型只能看到 Schema 和消息。execute_tools 每次用独立 AsyncSession，结束时回滚/关闭，不提交业务事务。工具自身的参数、权限、归属、SQL 和临时错误转换保持 Phase 03 实现。
+- 模型 timeout、API/网络/协议错误转安全代码；Tool 五种状态保留。整请求超时和图步数耗尽保留此前成功结果，未完成 Tool Calls 补终止消息。运行流中的每次工具进度仅供本次请求恢复部分结果，不是 checkpoint。程序缺陷及调用方主动取消继续向上传播。
+- answer 采用保守的证据引用模式：模型选结果，代码呈现完整 Tool data 与来源/时间，不接受模型自由事实或改写字段。clarify 只接受一个问题类型，reject 只接受能力原因类型。所有失败结果强制带回；部分成功标 partial，无有效证据标 unconfirmed。ok 仅指所引用查询成功，不证明用户需求已被语义上完整回答。
+- 该模式确保输出事实来自 Tool Result，尚不保证模型选中了最相关对象或最必要问题；完整数据引用可能较长。真实模型兼容性、工具选择质量和自然语言效果仍需后续明确的 live/Eval 验证。无业务 HTTP 路由或正式认证接入。
 
 ### Tool 合约
 
@@ -298,9 +310,9 @@ Phase 03 统一 `ToolResult[T]` 包含 status、具体类型的 data、source（
 
 `OrderNotAccessible` 对 self 范围调用者一律转为 forbidden，不区分他人订单与不存在订单；只有已有 `orders:read:any` 的上下文可把该异常解释为 not_found。权限与归属仍由 Service 检查，Tool 不额外探测订单存在性。模型参数之外单独传入服务端 RequestContext，所有额外参数拒绝，白名单为不可变显式映射，无动态导入或自动注册。输入/输出 JSON Schema 可通过 `tool_schemas()` 读取。
 
-已识别临时故障转换成固定安全错误，不暴露数据库或输入内容；程序缺陷、非临时数据库错误和错误 Service 输出结构继续抛出，不能标成 invalid_argument 或临时故障。会话由服务端调用方持有并负责关闭/回滚，Tool 不提交事务。未来每次模型工具调用均需对应结果，包括调用预算超限；目前无模型循环或重试器。
+已识别临时故障转换成固定安全错误，不暴露数据库或输入内容；程序缺陷、非临时数据库错误和错误 Service 输出结构继续抛出，不能标成 invalid_argument 或临时故障。Phase 04 Agent 为每次调用创建并关闭/回滚会话，Tool 不提交事务。每个已接收模型工具调用都对应工具结果或明确的超额/中断消息，不伪造未执行工具的业务 evidence。
 
-设置请求超时、单工具超时、总调用次数和图步数上限；上限不得由模型修改。初版顺序执行；只对明确可重试的临时故障有限重试，权限失败不重试。没有数据不能被解释成系统故障，系统故障也不能伪装成没有订单。
+设置请求超时、数据库超时、总调用次数和图步数上限；上限不得由模型修改。Phase 04 顺序执行，不加自动重试器；模型收到结果后提出的后续调用仍计入总预算，Service 会重新校验权限。没有数据不能被解释成系统故障，系统故障也不能伪装成没有订单。
 
 ### 会话边界
 
