@@ -63,6 +63,6 @@ def test_migration_round_trip() -> None:
     assert extensions == before[1]  # Shared extensions intentionally survive revision rollback.
     assert len(definitions) == 2  # Only Alembic's PK constraint and its index remain.
     alembic("upgrade", "head")
-    assert "0001 (head)" in alembic("current")
+    assert "0002 (head)" in alembic("current")
     assert "No new upgrade operations detected" in alembic("check")
     assert asyncio.run(inspect_database(url, require_empty=True)) == before

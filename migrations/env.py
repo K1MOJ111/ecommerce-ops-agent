@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import Settings
 from app.db.base import Base
-from app.db import models  # noqa: F401 -- register all 12 tables for autogeneration
+from app.db import models  # noqa: F401 -- register application tables for autogeneration
 
 config = context.config
 if config.config_file_name:

@@ -1,6 +1,6 @@
 # ecommerce-ops-agent 架构设计 V0.2
 
-本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core、Phase 05 RAG 与第七个只读工具已落地；HITL/持久化会话/业务写操作仍未实现。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
+本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core、Phase 05 RAG 与第七个只读工具已落地；Phase 06 在原图上增加 HITL、持久化 checkpoint 和两类受控写操作，具体审计与边界见本文件 Phase 06 节。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
 
 ## 1. 目标与业务范围
 
@@ -15,7 +15,7 @@
 | 物流查询 | logistics、logistics_items | 同样检查订单权限，支持多个包裹并标注同步时间 |
 | 售后规则 | knowledge_documents、knowledge_chunks | 检索适用版本并引用，不把解释表述为退款批准 |
 
-取消/退款申请、业务写操作、HITL（人工确认）、幂等控制、业务审计、正式认证和持续会话后续逐步实现。设计 refunds 和 audit_logs 表不等于提供对应写工具。
+Phase 06 已实现取消/退款申请的 Draft、HITL（人工确认）、幂等事务和业务 Audit；规则与接口见 Phase 06 节。正式认证、真实支付和复杂审批仍未实现。
 
 ## 2. 系统架构
 
@@ -131,7 +131,7 @@ Python 参数、返回值和模型字段具有明确类型注解；Pydantic 负�
 
 ## 4. 数据库 ER 模型
 
-保留 12 张业务表。logistics_items 是拆包关系的必要明细，knowledge_chunks 是知识分块及引用定位的必要载体。不增加会话表、checkpoint 表或通用业务操作表。
+保留原 12 张业务表。Phase 06 新增一张 agent_workflows，合并持久化归属、单操作草稿和事务结果；官方 checkpoint 使用独立 agent_checkpoints schema。以下原业务模型不变，新增设计见 Phase 06 节。
 
 ```mermaid
 erDiagram
@@ -316,9 +316,9 @@ Phase 03 统一 `ToolResult[T]` 包含 status、具体类型的 data、source（
 
 ### 会话边界
 
-暂不增加 LangGraph 持久化 checkpoint、会话数据库表或后台恢复流程。单次请求结束即结束本次运行；追问后的新请求须带必要上下文，历史用户/模型文本不作为可信业务证据，实时状态重新查询。
+旧 run_agent 入口不配置 checkpoint；新 Phase 06 Service 使用持久化工作流和检查点恢复。追问后仍发起带必要上下文的新请求，历史用户/模型文本不作为可信业务证据，实时状态重新查询。
 
-持续会话与 Postgres checkpoint 留到 HITL 阶段，同时设计会话归属、恢复授权和数据保留规则。
+HITL 的持久化归属与恢复授权已实现；数据保留/归档策略尚未实现。
 
 ## 6. 安全边界与 Phase 02 身份方案
 
@@ -373,7 +373,7 @@ RAG（检索增强生成）用于相对稳定的售后政策和说明资料。�
 - 使用中文商品及售后样本评估首版检索，覆盖无答案、过期规则、历史订单、规则冲突及引用准确性。
 - Mock 测试、真实模型测试、本地 Docker 结果与生产运行证据分别报告。
 
-当前不增加 Multi-Agent、Redis、消息队列、微服务或泛化 Repository。Reranker 仅在 Eval 显示明显排序问题后评估；持久化 checkpoint 仅留到 HITL 阶段设计。两者均须经过相应阶段的范围确认，不能因性能猜测提前加入。
+当前不增加 Multi-Agent、Redis、消息队列、微服务或泛化 Repository。Reranker 仅在 Eval 显示明显排序问题后评估；持久化 checkpoint 已按 Phase 06 授权加入，数据保留与负载扩展仍待后续明确范围。
 
 ## 9. 技术参考
 
@@ -383,3 +383,53 @@ RAG（检索增强生成）用于相对稳定的售后政策和说明资料。�
 - [SQLAlchemy AsyncSession 并发边界](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html#using-asyncsession-with-concurrent-tasks)：并发任务使用独立会话。
 - [PostgreSQL pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html)：辅助字符相似度匹配与索引。
 - [pgvector 官方项目](https://github.com/pgvector/pgvector)：向量存储及精确/近似检索能力。
+
+
+## Phase 06 设计审计与实现
+
+### 最小 Schema 调整
+
+原 12 表可以保存业务结果，却没有 durable thread owner、不可变草稿绑定和取消订单的幂等回执。refund_no 的唯一约束只能保护退款记录，不能同时证明哪个用户确认了哪个操作。内存会随进程退出消失；只放在 LangGraph State 中，业务提交和 checkpoint 保存又不在同一事务，重试存在重复执行窗口。
+
+新增 Alembic `0002` 的 `agent_workflows` 一表合并三种必要职责：`id` 为 thread UUID；`actor_id` 外键和 `(actor_id, request_key)` 唯一约束绑定所有者及初始请求；`operation_id` 可空且唯一；`draft` 保存原始结构化参数和状态快照；`confirmation` 绑定首次 confirm/reject；`status/result` 保存事务结果。另保存初始可信 request_id 和输入哈希，用于请求重试及误用检测。一请求最多一个操作；没有审批人分配表、通用状态机或操作历史表。
+
+`0001` 和原 12 表保持不变，新增表不回填/改写既有业务记录。降级 0002 会删除工作流数据，不能在有待确认/已执行回执的环境随意降级。往返测试仅在既有专用空库运行。官方 checkpoint 的 setup 单独显式执行，不在应用启动执行 DDL，不由 Alembic 管理或降级；checkpointer 包升级前需核对其自有 migrations。
+
+### Checkpoint 与恢复
+
+使用官方 `langgraph-checkpoint-postgres` 的 PostgresSaver，表位于独立 `agent_checkpoints` schema（checkpoints、checkpoint_blobs、checkpoint_writes、checkpoint_migrations）。Windows 默认 Proactor 不兼容 psycopg 异步连接，因此用 `asyncio.to_thread` 桥接官方同步 Saver 的三项异步图方法；不自建 checkpoint 存储格式、不修改全局事件循环。关闭 pickle fallback，明确允许当前 State 的四种 Pydantic 类型，不公开任意 checkpoint/history/state-update API。
+
+`build_graph(checkpointer=...)` 复用原 plan、只读工具、RAG 和 evidence，新增 `confirm_operation` 节点。写工具只创建持久化 Draft，实际业务写入前调用 LangGraph `interrupt(draft)`；每步使用 sync durability。Runtime Context 不写入 checkpoint，恢复时重新注入可信 actor、当前 permissions、Session 工厂和模型。只有 API Service 可以生成带确认值的 Command，LLM 和初始消息中的 confirm 不参与授权。
+
+图运行前先查工作流 owner，再通过 PostgreSQL session advisory lock 串行化同一 thread 的图调用；无跨用户全局锁。连接关闭或进程退出释放锁。锁等待 5 秒，超时返回存储暂不可用，由调用方使用同一身份重试。模型调用期间没有业务行锁；执行写事务时另取 workflow 行锁，再取 order、必要的 order_item 行锁。
+
+持久化草稿先于 checkpoint，节点重放复用同一草稿/operation_id。首次确认选择先落库，重试不能改成另一个选择。业务变更、Audit、最终 result 在同一 SQLAlchemy 事务提交：即使业务提交后 checkpoint 保存失败，重试仍返回该回执而不再写入。终态重试是读取旧结果，不是重新授权一个新操作；operation_id 必须匹配，权限/owner 每次重新检查。
+
+### 两类操作与规则
+
+- `request_order_cancellation(order_no, reason)`：只允许本人 `pending_payment`、`unpaid`、零实收、无物流及退款记录的订单。更新 status=cancelled 和 cancelled_at，不改历史支付/金额。已付款待履约取消需要准确释放库存预留，但现有 inventory.reserved 没有订单级预留归属，所以本阶段明确不支持它。
+- `create_refund_request(order_no, order_item_id, quantity, amount, reason)`：本人且明细属于同订单；订单为 pending_fulfillment/partially_shipped/shipped/completed，支付为 paid/partially_refunded 且已足额付款。requested/approved/processing/succeeded 都占用额度，rejected/failed/cancelled 不占用。数量不超明细剩余量；金额不超明细剩余额、当前数量按明细成交价比例向下取分的金额、整单已付款剩余额三者最小值。运费退款不支持。优惠分摊的不足一分余数保守舍去，不自动补齐。
+- Resume 在锁内重新查询所有规则数据并比较原状态快照；订单/明细更新时间、状态、付款额或剩余额变化均拒绝旧 Draft。需要重新发起新请求并确认，不能静默重算金额后执行。
+- 退款仅插入 requested 记录，refund_no=`OP-{operation_id}` 复用既有唯一约束；不审批、不打款，不修改 payment_status/paid_amount、库存或物流。
+
+受控 Draft 包含 operation_id、operation_type、actor、target（order_id/order_no/可选 item ID）、parameters、current_state、expected_change 和 confirmation_summary。只有可信代码生成 operation/thread UUID；输入拒绝额外字段。没有 arbitrary SQL、update_order_status 或 insert_refund 工具。七项只读 TOOLS 与两项 WRITE_TOOLS 分开，旧 run_agent 入口仍为无 checkpoint 的只读模式；写工具只在 durable service 模式开放。
+
+### Audit 与失败
+
+成功、显式 reject、业务冲突和可记录的业务写失败各有一个 Audit，重复调用复用回执，不增加重复审计。包含可信 actor/request_id、operation/thread/初始 request_id、action、resource、result、时间和固定安全变更摘要。原因文本和模型消息不进入 Audit。
+
+reject 不更新订单、不创建退款；仍保存拒绝回执及 Audit。写入 SQL 失败先回滚 SAVEPOINT，再保存 failed 回执与失败 Audit。Audit 自身失败则整个业务事务回滚，不报告成功；工作流保持等待确认、保留第一次选择，可用同一选择重试。数据库整体不可用时无法保证额外失败 Audit，此时 API 返回固定 503；预草稿参数/归属/规则拒绝记录为 ToolResult/检查点，不产生实际业务操作 Audit。
+
+所有本阶段写服务遵循父订单锁协议。未来支付、物流、退款审批等新写入也必须在同一锁协议下重读状态；直接管理员 SQL、绕过服务的写入不在安全承诺内。未实施数据库审计表只追加权限和运行/迁移角色分离，不宣称可抵抗数据库管理员篡改。
+
+### API 与身份
+
+- POST `/agent/requests`：`{request_key: UUID, message: string}`；同一用户重试相同 key 和相同正文复用 thread，不同正文返回 409。
+- GET `/agent/threads/{thread_id}`：只读取本人的工作流安全投影。
+- POST `/agent/threads/{thread_id}/resume`：`{operation_id: UUID, decision: "confirm" | "reject"}`；无模糊确认、无参数编辑和状态注入。
+
+所有工作流响应共用历史证据授权入口，包括 GET、相同 request_key 和终态 Resume。当前 active actor 校验后，从成功的 get_order/get_logistics evidence 取订单 ID，去重并复用 orders Service 的 authorize_order_access；该函数沿用原 _authorized_order 的当前权限和真实订单 ownership 条件。read:any 降为 read:self 后，他人订单仍拒绝；受保护 ID 缺失或非法也拒绝。拒绝整个响应，避免已渲染 text 泄露证据。普通商品证据不要求订单权限；只检查访问资格，不重跑 Agent 或调用 LLM。后续受保护 evidence source 在公共入口增加资源映射及所属 Service 授权。
+
+默认身份依赖仍返回 401。仅 development/test 可显式配置 DEV_ACTOR_ID 为现有本地用户，服务端固定授予 orders:read:self、orders:cancel:self、refunds:request:self；每次检查用户 active。production 拒绝该配置。Header/请求体不能指定 actor/permissions。正式认证仍未接入，此开发入口只在本机使用。
+
+参考：[官方 Interrupt/Resume 语义](https://docs.langchain.com/oss/python/langgraph/interrupts)、[官方 Postgres checkpoint 包](https://pypi.org/project/langgraph-checkpoint-postgres/)。实际验证结果以 PROJECT_STATE 为准。

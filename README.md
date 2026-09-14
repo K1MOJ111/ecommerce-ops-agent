@@ -21,7 +21,7 @@
 - Phase 02 不实现完整 JWT 登录，但保留 actor_id、permissions、request_id 的可信服务端上下文；订单查询必须验证数据归属。
 - RAG 首版采用向量检索、必要过滤和简单关键词/模糊检索，不加入 Reranker。
 - pg_trgm 只是辅助模糊匹配能力；中文检索效果须通过真实测试数据和 Eval 验证。
-- 持续会话和 Postgres checkpoint 留到 HITL 阶段。
+- Phase 06 已实现持久化 HITL 和两类受控写，运行方式见下方 Phase 06 节；旧 run_agent 保持只读。
 
 ## 阶段规划
 
@@ -55,7 +55,7 @@ API 只映射本机 8000，PostgreSQL 默认只映射本机 55432。`.env` 是�
 
 迁移必须显式执行，应用启动不会建表。也可用容器执行迁移：`docker compose run --rm api alembic upgrade head`。不使用容器运行 API 时，执行 `.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000`，与 Compose API 二选一以避免端口冲突。
 
-`/health/live` 为 API 存活检查；`/health` 为数据库连接就绪检查，失败返回 503；两者均不调用模型。业务接口和完整认证不在本轮范围。
+`/health/live` 为 API 存活检查；`/health` 为数据库连接就绪检查，失败返回 503；两者均不调用模型。Phase 06 业务接口见文末，正式认证仍未实现。
 
 ## 数据库测试
 
@@ -111,7 +111,7 @@ Remove-Item Env:\TEST_DATABASE_URL,Env:\MIGRATION_DATABASE_URL
 
 `app/services/orders.py` 提供订单和物流查询，必须传入服务端 `RequestContext`；`order_id`/`order_no` 二选一。`orders:read:self` 在 SQL 中限制用户归属，`orders:read:any` 才允许跨用户查询；数据库角色标签 operator 本身不授予权限。无权限、他人订单、不存在订单统一抛出 `OrderNotAccessible("order_not_accessible")`。返回类型定义于 `app/schemas/commerce.py`，不返回完整地址或用户身份字段。物流明细另外过滤同订单关系，避免异常关联泄露其他订单明细。
 
-Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、不生成自然语言、不依赖 Agent/LLM。不新增业务 HTTP 路由，现有可信身份依赖仍默认拒绝。正式认证和运行数据库最小权限仍是对外开放业务前的前置项。
+Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、不生成自然语言、不依赖 Agent/LLM。Phase 06 已提供业务 HTTP 路由，可信身份依赖默认拒绝；显式本机身份开关见文末。正式认证和运行数据库最小权限仍是对外开放业务前的前置项。
 
 `requirements.lock` 是本轮解析出的直接和传递依赖版本约束快照；安装时配合 `-c` 使用，不包含本地路径或凭据。它不是带哈希的跨平台完整供应链锁文件。运行镜像只安装运行依赖；httpx 用于模型 Adapter，pytest 等放在 `test` 可选依赖中。
 
@@ -196,7 +196,7 @@ response = state["final_response"]
 
 `scripts.agent_smoke` 使用 Fake Model 读取已有开发 Seed，不运行 Seed、不调用外部模型。若缺少开发样例则断言失败。容器检查使用独立镜像 `ecommerce-ops-agent:phase04-check` 和临时容器，不替换已有 API。具体已运行命令见 PROJECT_STATE.md。
 
-LangGraph 带入 checkpoint 包是依赖关系，本项目没有启用 checkpointer、保存会话或新增相关表；也没有 HITL 或业务写操作。
+以上描述旧 run_agent 只读入口；Phase 06 新增的持久化 HITL/业务写接口见下节，不通过旧入口执行写入。
 
 ## Phase 05 售后知识检索
 
@@ -236,3 +236,50 @@ Agent 继续使用原图和 Evidence：订单 → 按名称快照搜索商品 �
 ```
 
 Eval 数据集为 `data/knowledge/retrieval_eval.json`：7 个正常/历史查询、6 个无结果边界。正样本报告 Hit@3 和 MRR，负样本单独报告无结果准确率，另报范围正确率。实际本轮结果见 [Eval 报告](docs/rag_eval_results.json) 和 PROJECT_STATE；Fake 指标仅验证本地检索实现，不能证明真实 Embedding 或 LLM 质量。
+
+
+## Phase 06 HITL 与受控写操作
+
+本地实现只支持未付款订单取消及退款申请，不进行真实退款支付。规则、Schema 审计和事务边界见 [Phase 06 架构](docs/architecture.md#phase-06-设计审计与实现)，验证记录见 PROJECT_STATE。
+
+```powershell
+.venv/Scripts/python.exe -m pip install -c requirements.lock -e '.[test]'
+.venv/Scripts/python.exe -m alembic upgrade head
+.venv/Scripts/python.exe -m scripts.setup_checkpoints
+
+# 明确启用本机固定身份；不设置时业务接口返回 401，production 禁用此选项。
+$env:DEV_ACTOR_ID = & .venv/Scripts/python.exe -c 'from scripts.seed_data import seed_id; print(seed_id("customer-a"))'
+.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+# 停止该本地 API 后清理本次 shell 配置：Remove-Item Env:\DEV_ACTOR_ID
+```
+
+正常 Agent 请求需要配置已有 LLM；无 Key 时不调用付费模型，下面的 Fake smoke 可验证整个流程。固定身份不是正式登录，不应公网开放。启动命令不会自动迁移、导入或修改业务数据。
+
+另一个 PowerShell 窗口调用（第一次请求保留 request_key，网络重试复用同一个值）：
+
+```powershell
+$requestKey = [guid]::NewGuid().ToString()
+$body = @{request_key=$requestKey; message='请取消订单 SEED-O001，原因：暂时不需要了'} | ConvertTo-Json
+$draft = Invoke-RestMethod http://127.0.0.1:8001/agent/requests -Method Post -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
+$draft | ConvertTo-Json -Depth 10
+# 阅读 draft；确认时才执行下面的 confirm，也可显式改为 reject。
+$confirmation = @{operation_id=$draft.operation_id; decision='confirm'} | ConvertTo-Json
+Invoke-RestMethod "http://127.0.0.1:8001/agent/threads/$($draft.thread_id)/resume" -Method Post -ContentType 'application/json' -Body $confirmation
+```
+
+退款请求须明确订单号、订单明细 UUID、数量、CNY 金额和原因；缺一项先追问。一个 thread 最多一个写操作；终态后需要新 request_key 发起另一操作。重新启动 API 后，同一可信用户可 GET 原 thread 并 Resume 原 operation_id。确认后重复 Resume 返回同一结果；修改已确认选择返回 409。
+
+真实 PostgreSQL Fake smoke 复用测试库中按随机 UUID 隔离的测试数据，实际提交事务后只清理本轮数据；不写开发订单。先按前文设置 TEST_DATABASE_URL；迁移测试还需 MIGRATION_DATABASE_URL。
+
+```powershell
+.venv/Scripts/python.exe -m pytest -q
+.venv/Scripts/python.exe -m scripts.hitl_smoke hitl
+.venv/Scripts/python.exe -m scripts.hitl_smoke restart
+.venv/Scripts/python.exe -m scripts.hitl_smoke concurrency
+.venv/Scripts/python.exe -m pip check
+.venv/Scripts/python.exe -m compileall app scripts tests
+docker compose config --quiet
+git diff --check
+```
+
+Checkpoint infrastructure 位于 agent_checkpoints schema，显式 setup 可重复运行。测试后保留空 checkpoint 表及自有迁移版本；应用业务表迁移仍由 Alembic 0002 管理。不要通过清理 checkpoint 来“重置”已执行操作，幂等回执需要保留。当前没有数据保留/归档任务，也没有生产认证、支付、前端或复杂审批流。

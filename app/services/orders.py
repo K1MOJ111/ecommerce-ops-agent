@@ -19,6 +19,7 @@ class OrderNotAccessible(LookupError):
 
 async def _authorized_order(
     session: AsyncSession, context: RequestContext, *, order_id: UUID | None, order_no: str | None,
+    load_items: bool = True,
 ) -> Order:
     if (order_id is None) == (order_no is None):
         raise ValueError("provide_exactly_one_order_identifier")
@@ -29,10 +30,17 @@ async def _authorized_order(
         if "orders:read:self" not in context.permissions:
             raise OrderNotAccessible()
         statement = statement.where(Order.user_id == context.actor_id)
-    row = await session.scalar(statement.options(selectinload(Order.items)))
+    if load_items:
+        statement = statement.options(selectinload(Order.items))
+    row = await session.scalar(statement)
     if row is None:
         raise OrderNotAccessible()
     return row
+
+
+async def authorize_order_access(session: AsyncSession, context: RequestContext, order_id: UUID) -> None:
+    """Recheck current read scope and ownership without reloading historical evidence."""
+    await _authorized_order(session, context, order_id=order_id, order_no=None, load_items=False)
 
 
 async def get_order(

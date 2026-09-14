@@ -2,6 +2,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
+from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError, TimeoutError as PoolTimeoutError
@@ -18,6 +19,8 @@ from app.schemas.tools import (
     SearchProductsInput, ToolError, ToolInput, ToolResult, ToolStatus,
 )
 from app.services import catalog, inventory, orders
+from app.schemas.operations import CancellationInput, OperationDraft, RefundRequestInput
+from app.services.operations import OperationError, create_draft
 
 ERROR_MESSAGES = {
     "not_found": "No matching data was found.",
@@ -46,10 +49,12 @@ class Tool:
     service: Callable[..., Awaitable[object]]
     requires_context: bool = False
     requires_embedding: bool = False
+    requires_workflow: bool = False
 
     async def invoke(
         self, arguments: object, *, session: AsyncSession, context: RequestContext,
         settings: Settings | None = None, embedding: EmbeddingProvider | None = None,
+        thread_id: UUID | None = None,
     ) -> ToolResult:
         # Context is supplied separately by server code, never deserialized from arguments.
         if not isinstance(context, RequestContext):
@@ -62,12 +67,19 @@ class Tool:
             return _failure(self.result_schema, self.name, context, "invalid_argument")
 
         try:
-            if self.requires_embedding:
+            if self.requires_workflow:
+                if thread_id is None:
+                    return _failure(self.result_schema, self.name, context, "forbidden", code="durable_workflow_required")
+                data = await self.service(session, context, thread_id=thread_id, operation_type=self.name, arguments=params)
+            elif self.requires_embedding:
                 data = await self.service(session, **params, settings=settings, embedding=embedding)
             elif self.requires_context:
                 data = await self.service(session, context, **params)
             else:
                 data = await self.service(session, **params)
+        except OperationError as exc:
+            return _failure(self.result_schema, self.name, context,
+                            "forbidden" if exc.http_status == 403 else "invalid_argument", code=exc.code)
         except orders.OrderNotAccessible:
             # The Service hides absence from self-scoped callers. Only read:any can distinguish it.
             status = "not_found" if "orders:read:any" in context.permissions else "forbidden"
@@ -122,21 +134,32 @@ TOOLS = MappingProxyType({tool.name: tool for tool in (
          PolicySearchInput, ToolResult[list[PolicyHit]], search_after_sales_policy, requires_embedding=True),
 )})
 
+WRITE_TOOLS = MappingProxyType({tool.name: tool for tool in (
+    Tool("request_order_cancellation", "Draft cancellation of an unpaid order. Requires explicit human confirmation; does not cancel yet.",
+         CancellationInput, ToolResult[OperationDraft], create_draft, requires_workflow=True),
+    Tool("create_refund_request", "Draft a refund application for a specific order item, quantity, CNY amount and reason. "
+         "Requires explicit human confirmation. Does not approve or transfer money.",
+         RefundRequestInput, ToolResult[OperationDraft], create_draft, requires_workflow=True),
+)})
+
 
 def get_tool(name: str) -> Tool:
     return TOOLS[name]
 
 
-def tool_schemas() -> list[dict[str, object]]:
-    return [tool.schema() for tool in TOOLS.values()]
+def tool_schemas(*, include_write: bool = False) -> list[dict[str, object]]:
+    return [tool.schema() for tool in (*TOOLS.values(), *(WRITE_TOOLS.values() if include_write else ()))]
 
 
 async def invoke_tool(
     name: str, arguments: object, *, session: AsyncSession, context: RequestContext,
     settings: Settings | None = None, embedding: EmbeddingProvider | None = None,
+    thread_id: UUID | None = None,
 ) -> ToolResult:
     if not isinstance(context, RequestContext):
         raise TypeError("server_request_context_required")
+    if isinstance(name, str) and name in WRITE_TOOLS and thread_id is not None:
+        return await WRITE_TOOLS[name].invoke(arguments, session=session, context=context, thread_id=thread_id)
     if not isinstance(name, str) or name not in TOOLS:
         return _failure(ToolResult[None], "registry", context, "invalid_argument", code="unknown_tool")
     return await get_tool(name).invoke(arguments, session=session, context=context, settings=settings, embedding=embedding)

@@ -20,7 +20,7 @@ pytestmark = pytest.mark.integration
 EXPECTED_COUNTS = {
     "users": 3, "products": 3, "product_skus": 12, "inventory": 12, "orders": 6,
     "order_items": 11, "logistics": 5, "logistics_items": 9, "refunds": 1,
-    "knowledge_documents": 2, "knowledge_chunks": 0, "audit_logs": 0,
+    "knowledge_documents": 2, "knowledge_chunks": 0, "audit_logs": 0, "agent_workflows": 0,
 }
 
 

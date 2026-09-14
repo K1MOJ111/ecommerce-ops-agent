@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Literal
+from uuid import UUID
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -15,6 +16,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     database_url: SecretStr
+    dev_actor_id: UUID | None = None
     llm_base_url: str | None = None
     llm_api_key: SecretStr | None = None
     llm_model: str | None = None
@@ -48,6 +50,12 @@ class Settings(BaseSettings):
         if not valid:
             raise ValueError("DATABASE_URL must use postgresql+asyncpg and name a database")
         return value
+
+    @model_validator(mode="after")
+    def local_identity_only(self):
+        if self.dev_actor_id is not None and self.app_env == "production":
+            raise ValueError("dev_actor_id_forbidden_in_production")
+        return self
 
 
 @lru_cache

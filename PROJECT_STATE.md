@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-> 更新：2026-09-14。先读本文件，再按任务读 [架构](docs/architecture.md)、[运行说明](README.md) 和相关代码。最新用户指令、已验证实际状态优先于本摘要；发现冲突须指出并同步。历史使用 Git，不新建重复文档备份。
+> 更新：2026-09-15。先读本文件，再按任务读 [架构](docs/architecture.md)、[运行说明](README.md) 和相关代码。最新用户指令、已验证实际状态优先于本摘要；发现冲突须指出并同步。历史使用 Git，不新建重复文档备份。
 
 ## Project Goal
 
@@ -8,20 +8,20 @@
 
 ## Current Phase
 
-**Phase 05 completed / awaiting Phase 06**。
+**Phase 06 completed / awaiting Phase 07**。
 
-- Phase 04 基线为 `5721ef8`；本轮进入时 Git 工作区干净。
-- Phase 05 售后 RAG 完整本地链路已实现、353 项完整测试及真实 PostgreSQL Fake RAG smoke 通过，用户已审核通过。
-- Phase 05 正式关闭，本文件随阶段关闭提交保存；提交号见 Git 历史。Phase 06 尚未开始，不发布或部署。
+- 起点为已关闭 Phase 05 `39ca227`，进入时工作区干净；没有依赖旧任务设计或修改原 0001。
+- 用户确认独立复审通过：原 P1、两个 P2 均 closed，新 P0/P1 均为 0；P3 延期至 Final Hardening，已授权 Phase 06 提交与关闭。
+- 本次最终完整回归重新执行：454 passed in 93.88s，三组真实 PostgreSQL smoke 全部通过；Alembic 为 0002 (head)，无结构漂移。Phase 06 按授权收口，未部署、未开始 Phase 07。
 
 ## Confirmed Architecture
 
-- 沿用 V0.2 单体分层，Service 直接使用 SQLAlchemy，无通用 Repository；原 Business Services/ORM/迁移及可信 RequestContext 未改，Registry 最小扩展第七工具。
-- 真实 LangGraph 单 Agent：START → plan → execute_tools/answer/clarify/reject；工具分支有界返回 plan，终结节点到 END。
-- plan 通过可替换 Model 读取用户消息与工具结果，提出原生 Tool Calls 或类型化终结动作。执行只能走七个只读工具的 Registry；第七项为售后规则检索。
-- State 不含 Session、客户端或可信身份；AgentContext 通过 LangGraph runtime context 注入身份、Model、Session 工厂、Settings 与可选 Embedding Provider。
-- answer 使用模型选择的成功证据编号，由代码引用完整 Tool data，不接受模型提供的事实值；追问/拒绝使用受控类型。
-- HTTP 仍只有健康接口，正式身份依赖默认拒绝；无业务 HTTP、HITL、checkpoint、业务写操作、前端或 Multi-Agent；RAG 为内部只读工具。
+- 沿用 V0.2 单体分层；Service 直接 SQLAlchemy，无通用 Repository、Multi-Agent 或前端。原 12 表与首迁移不变；订单查询和历史回放复用同一 Service 授权规则。
+- 复用真实 LangGraph 的 plan → execute_tools → plan/answer/clarify/reject；新增 confirm_operation → END。七个只读 TOOLS 与两个 WRITE_TOOLS 分开，写工具只生成持久化 Draft。
+- 旧 run_agent 保持无 checkpoint 的只读调用；新 start_workflow/get_workflow/resume_workflow 使用官方 PostgreSQL checkpoint 和可信 Runtime Context。模型、Session、权限不放 State；State 增加 draft/operation_result。
+- agent_workflows 一表保存用户归属、初始请求键、最多一个操作、首次确认及事务结果；官方 checkpoint 四表独立在 agent_checkpoints schema。
+- 实际写入前 interrupt，确认后锁内重新校验；业务变更、Audit、最终结果同事务。业务已提交但 checkpoint 失败时读持久化结果恢复。
+- FastAPI 提供发起/查看/恢复接口，身份默认 401；仅显式 development/test DEV_ACTOR_ID 可启用本机固定身份，production 拒绝该配置。无正式认证、真实支付或生产部署。
 
 ## Confirmed Tech Stack
 
@@ -29,27 +29,29 @@
 - Phase 04 新增 LangGraph 1.2.11；传递依赖 langchain-core 1.6.3。复用 httpx 0.28.1 并列入运行依赖，无供应商 SDK。
 - PostgreSQL 镜像 `pgvector/pgvector:0.8.2-pg17`；Phase 02 实查 PostgreSQL 17.10、vector 0.8.2、pg_trgm 1.6。本轮在现有 PostgreSQL 执行测试，未升级数据库。
 - pytest 9.1.1、pytest-asyncio 1.4.0；Docker Compose 仅 API/DB，本机端口，非 root API。
-- `requirements.lock` 为 Phase 04 固定版本快照，该阶段独立 Linux 镜像安装通过；Phase 05 未改依赖，本地 pip check 通过，未重新构建镜像。不是带哈希的跨平台锁。
-- langgraph-checkpoint 等包是 LangGraph 传递依赖，项目没有配置 checkpointer 或持久化会话。
+- `requirements.lock` 为固定版本快照，Phase 06 已补新增 checkpoint 依赖；本地安装/pip check 通过。本阶段未重新构建 Linux 镜像，不是带哈希的跨平台锁。
+- Phase 06 新增 langgraph-checkpoint-postgres 3.1.2、psycopg/psycopg-binary 3.3.5、psycopg-pool 3.3.1；锁文件同步必要依赖。复用官方同步 PostgresSaver + asyncio.to_thread 兼容 Windows Proactor，无全局事件循环修改。
 
 ## Repository Structure
 
 | 路径 | 职责 |
 |---|---|
-| `app/main.py`、`app/api/` | 应用生命周期、依赖、健康接口 |
+| `app/main.py`、`app/api/` | 应用生命周期、可信身份、健康与 Agent 发起/查看/Resume 接口 |
 | `app/core/config.py`、`security.py` | Settings、不可变 RequestContext |
-| `app/db/base.py`、`session.py`、`models/` | 12 表、Engine、短期 AsyncSession |
+| `app/db/base.py`、`session.py`、`models/` | 原 12 表 + agent_workflows、Engine、短期 AsyncSession |
 | `app/schemas/commerce.py`、`tools.py` | Service 返回结构、Tool 输入和类型化 ToolResult |
 | `app/services/catalog.py`、`inventory.py`、`orders.py` | 六个基础查询函数 |
-| `app/tools/registry.py` | 七工具固定白名单、Service 适配、可信依赖注入、错误转换、Schema 导出 |
+| `app/tools/registry.py` | 七项只读与两项 Draft 独立白名单、可信依赖注入、错误转换、Schema 导出 |
+| `app/services/operations.py`、`workflows.py`、`app/schemas/operations.py` | 业务规则、Draft、事务/Audit/回执、持久化运行与 API 合约 |
+| `app/agent/checkpoint.py`、`scripts/setup_checkpoints.py`、`hitl_smoke.py` | 官方 PostgresSaver 桥接、显式初始化及三组真实 PostgreSQL 冒烟 |
 | `app/agent/llm.py`、`state.py`、`graph.py` | 模型协议/Adapter、类型化 State、真实 LangGraph 和证据约束回答 |
 | `app/rag/` | 文档/引用 Schema、分块入库、Embedding Adapter、Metadata Filter、向量/关键词召回与 RRF |
 | `data/knowledge/` | 10 份模拟文档与 13 条 Eval 查询 |
 | `scripts/ingest_knowledge.py`、`rag_eval.py`、`rag_smoke.py` | 显式入库、评估、事务回滚的完整 RAG 冒烟 |
-| `docs/rag_eval_results.json` | 本轮实际 Fake Eval 报告 |
+| `docs/rag_eval_results.json` | Phase 05 已验证的 Fake Eval 报告，Phase 06 未重写 |
 | `scripts/agent_smoke.py` | Fake Model + 真实图/工具/数据库，只读开发 Seed 冒烟 |
 | `scripts/seed_data.py` | 显式开发/测试 Seed 命令 |
-| `migrations/versions/0001_initial_schema.py` | 首迁移，配合 env.py/alembic.ini |
+| `migrations/versions/` | 保留 0001，新增 0002_agent_workflows，配合 env.py/alembic.ini |
 | `tests/unit/`、`tests/integration/` | 基础、数据库、Seed/Service、迁移测试 |
 | `pyproject.toml`、`requirements.lock`、Docker/Compose 配置 | 工程与运行依赖 |
 | `docs/architecture.md`、`README.md` | 架构细节与可复制命令 |
@@ -58,15 +60,28 @@
 
 ## Data / Storage Design
 
+- Phase 06 schema change：Alembic 0002 新增 agent_workflows（owner 外键、actor/request_key 联合唯一、operation_id 唯一、状态/草稿/结果约束），不修改 0001 和原业务表。官方 checkpoint setup 独立，当前自有 migrations 为 0–9。
+- 2026-09-14 本轮实查：开发库 64 条原记录、0 workflow；两个测试库应用表均为 0；开发/普通测试库 checkpoint 数据表均为 0（迁移记录保留 10 条），迁移测试库无 checkpoint schema。三库版本均为 0002。
+- 下列 12 表和约束/索引数量为原 0001 基线历史，不含新增工作流表。
+
 - 12 表：users、products、product_skus、inventory、orders、order_items、logistics、logistics_items、refunds、knowledge_documents、knowledge_chunks、audit_logs；另有 Alembic 自有版本表。
 - UUID 主键、独立业务编号、TIMESTAMPTZ、NUMERIC(18,2)/Decimal、CNY 币种和历史快照；交易外键全部 RESTRICT，无删除级联。
 - 实查 32 CHECK、13 外键、12 业务 UNIQUE、8 额外非唯一索引；含业务/版本表主键索引共 33 索引。
-- `vector` 不固定维度，无近似向量索引；EMBEDDING_DIM 可空。Phase 05 校验实际响应维度与有限非零向量，SQL CASE 确保只计算同模型/同维度距离。换向量空间须显式重建向量；本轮不修改 ORM/迁移。
+- `vector` 不固定维度，无近似向量索引；EMBEDDING_DIM 可空。Phase 05 校验实际响应维度与有限非零向量，SQL CASE 确保只计算同模型/同维度距离。换向量空间须显式重建向量；Phase 06 不修改知识 ORM/向量迁移。
 - 2026-09-13 最终逐库实查：`ecommerce_ops`、`ecommerce_ops_test`、`ecommerce_ops_migration_test` 均为 0001；两个测试库业务记录均为空。
 - 开发库 Seed 合计 64 条：3 用户（2 customer/1 operator）、3 商品、12 SKU、12 库存、6 订单、11 明细、5 包裹、9 包裹明细、1 历史退款、2 draft 知识文档；分块、向量、审计日志均为 0。
 - `SEED-O001` 至 `006` 依次覆盖待支付、待履约、部分发货、已发货、已完成、已取消；奇数归消费者甲，偶数归乙。含多包裹、active/inactive、正常/低/零可售库存。固定时间从 2026-09-01 UTC 起，均是模拟资料。
 
 ## Core Workflows
+
+- POST /agent/requests 接收 request_key/message；用户与 key 唯一，输入哈希不同拒绝复用。thread_id、operation_id 由可信代码生成。
+- 所有 WorkflowResponse 返回共用 replay authorization：检查当前 active actor，从订单/物流成功 evidence 提取真实订单 ID，复用 orders Service 按当前权限和数据库 ownership 授权。GET、相同 request_key、终态 Resume 均经过检查；拒绝整个响应，避免 text/evidence 泄露。不调用 LLM、不重跑 Agent；公开商品证据不要求订单权限。
+- 写意图 → 业务授权/规则检查 → 持久化原 Draft → LangGraph interrupt → waiting_for_confirmation；此时订单/退款/Audit 尚未改变。
+- Resume：先查 active actor、当前权限和 owner，再加载 checkpoint，核对 operation_id、等待节点、原 Draft 和显式 confirm/reject；首次选择单独保存，不能改选。
+- 同 thread 的图调用由 PostgreSQL advisory lock 串行；业务事务锁 workflow → order → 可选 order_item。锁内重读状态和累计额度，失败返回明确冲突。
+- 取消仅本人 pending_payment/unpaid/零收款且无物流退款；退款仅足额付款订单的明细申请，校验剩余数量、按数量比例取分的明细金额、整单剩余已付额。只插入 requested，不打款、不改支付状态。
+- 成功/拒绝/冲突/业务失败均保存结果与 Audit；业务 SQL 失败回滚 SAVEPOINT，Audit 失败回滚整个业务事务，允许同一确认重试；已提交结果始终幂等返回。
+- 下列为保留的查询/RAG 调用链；其只读 Session 规则不代表写服务没有事务。
 
 - 应用 lifespan 管理 Engine/sessionmaker；健康接口保持原状，SELECT 1 失败返回 503。
 - `run_agent(message, context=AgentContext(...))` 只接受用户文本和服务端上下文，每次新建空 State；不接受客户端提交的 State、角色消息或 evidence。
@@ -101,16 +116,20 @@
 - Phase 05 验证：完整 **353 passed in 51.50s**（原 295 + 52 RAG 专项 + 第七工具 6 项身份字段验证）；完整 RAG smoke 通过。13 条 Fake Eval：Hit@3=1.0、MRR=1.0、无结果准确率=1.0、范围正确率=1.0。
 - Phase 05 阶段关闭：用户审核通过，核对范围与敏感信息后按授权提交；353 passed 后实现代码未变，不重复完整测试，未增加功能。
 
+- Phase 06：两项固定 Draft 工具、持久化 LangGraph interrupt/resume、请求/操作唯一身份、owner/active/permissions 校验、状态重检、订单锁内金额数量约束、原子业务/Audit/回执、真实调用 API 完成。
+- Phase 06 验证：新增 79 项（63 PostgreSQL HITL + 16 输入/注册/配置）；完整 432 passed，HITL/restart/concurrency smoke 均通过；独立 Python 进程恢复成功。
+- Phase 06 复审修复：P1 新增 12 项回归，覆盖订单/物流撤权、any 降 self、GET/request_key、恢复权限、本人查询、公开商品和真实归属变更；拒绝 HTTP 正文精确为安全错误且不含历史证据。P2 新增 10 项，覆盖七种状态、多行/混合数量金额、整单额度和同订单不同 item 的真实 PostgreSQL 竞争。
+- Phase 06 正式收口：独立复审通过；Durable HITL、PostgresSaver checkpoint、thread ownership、replay authorization、cancel order、refund request、operation draft、resume revalidation、idempotency、transaction/row locking、audit 与 API 已实现。跨 item concurrent refund cap 和状态累计/整单额度验证通过；最终完整回归及三组 smoke 已重新执行，按用户授权提交关闭。
+
 ## In Progress
 
-无。Phase 05 已审核通过并关闭，等待 Phase 06 明确任务。
+无进行中的开发任务。Phase 06 已完成，等待用户指定 Phase 07 范围；本轮不开始下一阶段。
 
 ## Not Started
 
-- 正式认证、数据库运行/迁移角色分离、业务 HTTP 接入和端到端身份测试。
-- 真实 Embedding/LLM 的兼容性和业务质量 Eval；RAG 本地实现已完成，没有 Reranker。
-- 通用写入、退款/取消执行、并发写规则、HITL、幂等操作、业务审计、checkpoint/持久会话。
-- live Embedding 与 Phase 04 遗留 live LLM smoke：本地均未配置 Key，本轮未执行。
+- 正式认证、运行/迁移数据库角色分离、Audit 只追加数据库权限、公开部署。
+- 已付款订单取消、库存预留释放、复杂审批/真实退款打款、运费退款、多操作工作流、checkpoint/回执保留与归档策略。
+- live LLM/Embedding 兼容性和真实质量 Eval、负载测试、当前依赖的 Linux 镜像构建；不因本地通过假定这些已验证。
 
 ## Decisions
 
@@ -143,46 +162,61 @@
 24. 知识数据仅进入 tool 消息，固定系统消息、权限与白名单不受文本影响。Embedding 缺配置/失败返回 temporarily_unavailable，不自动退化成成功；无适用候选返回 not_found。
 25. 当前不加入 Reranker：“现有 Fake Eval 没有显示排序瓶颈，因此暂无证据支持增加 Reranker；真实 Embedding + 真实业务 Query Eval 后再决定。”
 
+26. Phase 06 经设计审计以一张 agent_workflows 合并归属/操作/幂等回执，替代原“本阶段不新增表”的历史限制；没有修改已确认业务模型。
+27. 本阶段一请求最多一个不可编辑的操作，首次 confirm/reject 不可翻转。状态变化需新请求、新确认；不自动修改原 Draft。
+28. paid pending_fulfillment 的取消需要订单级库存预留归属，当前没有可靠释放数据，因此仅允许未付款取消，不凭总 reserved 推算。
+29. refund_no 使用 OP-{operation_id} 复用现有 UNIQUE；workflow 行锁、唯一 operation_id 与同事务回执形成幂等保证，订单锁串行化不同退款申请的累计额度校验。
+30. official PostgresSaver 的同步方法用标准库线程桥接，避免 Windows Proactor 异步 psycopg 错误；基础表由独立 setup 显式初始化。Audit 失败必须业务全回滚，失败节点仅在原草稿/同一持久化确认匹配时重试。
+31. Reject 不更改业务订单/退款，但写审计和拒绝回执；预草稿失败保留 ToolResult/检查点，数据库整体失败不能保证额外失败 Audit，API 不回显底层异常。
+32. 历史缓存不是授权凭证。公共 response 入口按 evidence source 映射受保护资源，去重后调用 authorize_order_access，复用 _authorized_order 的 any/self 与真实 ownership 检查，不加载明细或重建历史结果；新增受保护 source 时在此扩展其所属 Service 授权。
+33. 退款 requested/approved/processing/succeeded 占用数量和金额，rejected/failed/cancelled 不占用。整单独立上限测试显式构造数据库允许的历史不一致：整单折扣未分摊到 item，使整单剩余额小于明细剩余额；这是防御性约束验证，不改变当前退款业务规则。
+34. P3 draft JSONB 与列字段完整绑定 CHECK 留给 Final Hardening；本轮保留应用层保护，不新增 Schema 修改。
+
 ## Known Issues
 
-- 无已知阻断本轮本地实现验收的故障；正式认证、数据库最小权限及业务 HTTP 尚未落实，不代表生产就绪。
-- live Embedding 尚未验证；live LLM Tool Calling 尚未验证。本地 Key 未配置，Mock/Fake 通过不证明供应商兼容、真实语义召回、模型工具选择或语言体验。
-- 当前 Retrieval Eval 只有 13 条模拟样本（7 正样本、6 无结果边界）；Hit@3 / MRR = 1.0 仅代表 Fake Embedding 回归结果，不代表真实检索质量。真实中文别名/错字、阈值和长文需后续实测。
-- relevant_date 仅过滤；未自动决定订单应按创建/付款/签收哪个事件选规则，使用当前商品品类，未处理历史品类快照、下架商品映射或不同文档的规则冲突。引用不等于退款批准。
-- Embedding 模型/版本标签需稳定；服务商若在相同标签下变更向量空间，不能仅靠维度发现，须主动换版本标签并重建。没有近似索引或大规模负载验证。
-- 超长单段保持完整，可能超出供应商输入限制；入库失败保留旧数据。没有复杂解析、自动拆分超长规则或分批供应商请求。
-- 原文版本不可变，但显式重建 chunk 会变更 chunk_id；当前不保存历史会话，持久引用寿命需在后续持久化阶段处理。
-- Agent 仍输出完整证据，可能冗长；不保证模型已查全问题、选对所有对象或识别每个语义注入。测试验证权限/白名单/系统消息不可由知识文本提升，不宣称模型完全免疫提示注入。
-- 单请求无 checkpoint/恢复。超时为 asyncio 协作取消，未改变原运行服务或部署。
+- 正式认证、数据库最小权限角色、Audit 防篡改尚未实现；DEV_ACTOR_ID 只供本机模拟，不等于登录系统。生产级部署、备份/恢复和负载验证尚未完成。
+- P3 deferred：agent_workflows.draft JSONB 内 operation_type、actor、operation_id 与列字段缺少完整数据库绑定 CHECK；保留现有应用层校验和已有数据库约束，留给 Final Hardening，不作为本轮关闭条件，未为此修改 Schema。
+- 已付款取消不支持；取消不释放库存。退款仅申请，非审批/打款；不退运费，按数量分摊向下取分，可能保守留下一分以内余数。每请求一个操作，待确认参数不能编辑。
+- 未来支付/物流/审批等写入必须遵守父订单锁与重新校验协议；直接 SQL/数据库管理员绕过不在保证内。回执/checkpoint 未设计保留清理策略，不能随意删除幂等记录。
+- 模型/用户消息和必要查询数据会存入 checkpoint；尚无业务隐私保留/归档策略；可信 Context、API Key、Session 不序列化。仅允许的 State 类型可反序列化，pickle 关闭。
+- live LLM 与 live Embedding Key 均未配置，本轮未调用；Mock/Fake 通过不证明供应商兼容、语义召回、工具选择或语言体验。RAG 13 条 Fake Eval 仍非真实质量指标，无 Reranker。
+- RAG 历史事件日期、商品品类快照、政策冲突和下架映射仍未完整解决；引用不等于退款批准。向量空间/长文/引用生命周期限制延续 Phase 05，详见架构与 README。
+- 本阶段未构建/部署新 API 镜像。Windows Docker 首次启动曾因 WSL 0x800705aa 失败，临时 2GB WSL 配置恢复成功后已移除；现有 Docker 数据未重置。
 
 ## Validation Status
 
-Phase 05 实际验证：**2026-09-14（Asia/Shanghai）**；下列 python 指 `.venv/Scripts/python.exe`。
+最终收口验证：**2026-09-15（Asia/Shanghai）**。Python 均使用工作区 `.venv/Scripts/python.exe`。本次重新执行完整 pytest、全部 smoke、静态检查及 Alembic current/check；下表标记的历史专项/开发数据检查不冒充本次执行。
 
-| 实际执行 | 真实结果 |
+| 执行 | 真实结果 |
 |---|---|
-| `python -m pytest -q` | **353 passed in 51.50s**，0 failed、0 skipped；含真实 PostgreSQL 和专用空库迁移往返 |
-| RAG 专项 | 52 项通过，覆盖入库/重复/版本/内容变更/原子失败、过滤/有效期边界、vector/keyword/RRF/Top-K、引用对应、异维异模型隔离、Tool 状态、Agent 多工具与注入边界 |
+| `python -m pytest -q` | **本次 454 passed in 93.88s**，0 failed/0 skipped；包含真实 PostgreSQL、全部 P1/P2 回归和专用空库迁移往返 |
+| P1 replay authorization 专项（修复轮历史） | **12 passed in 5.84s**；修复前撤权 GET 用例实测失败（200 而非 403），修复后全组通过；本次纳入完整回归 |
+| P2 退款专项（修复轮历史） | **10 passed in 8.29s**；七种状态、多状态累计、整单额度、跨 item 并发；本次纳入完整回归 |
+| 父订单锁反向验证（修复轮历史） | 独立进程临时移除 Order 的 FOR UPDATE，跨 item 测试按预期失败：总退款 40 > 整单上限 30；无生产源码修改 |
+| HITL PostgreSQL 专项 | 本次全量包含 85 项（原 63 + 修复新增 22） |
+| `python -m scripts.hitl_smoke hitl` | **本次 4 passed in 6.16s**；取消/退款确认与拒绝、重复确认 |
+| `python -m scripts.hitl_smoke restart` | **本次 3 passed in 7.60s**；新 Engine、销毁并重建 App、独立 Python 进程 Resume |
+| `python -m scripts.hitl_smoke concurrency` | **本次 5 passed in 4.66s**；原幂等/并发场景及同订单不同 item 的父订单锁竞争 |
 | `python -m pip check` | No broken requirements found，退出码 0 |
 | `python -m compileall app scripts tests` | 退出码 0 |
-| `docker compose config --quiet` | 退出码 0 |
-| `git diff --check` | 通过；Windows LF/CRLF 提示不是空白错误 |
-| `git diff --exit-code -- app/db app/services app/schemas app/core/security.py migrations pyproject.toml requirements.lock` | 退出码 0；原模型/Service/Schema/身份/迁移/依赖未变 |
-| `python -m scripts.rag_smoke --report docs/rag_eval_results.json` | 真实 PostgreSQL/pgvector + Fake Embedding + 原 Registry/LangGraph/Evidence 全链路通过；事务回滚 |
-| Retrieval Eval | `data/knowledge/retrieval_eval.json`：7 正样本、6 无结果样本，K=3；Hit@3=1.0、MRR=1.0、无结果准确率=1.0、范围正确率=1.0；逐条结果见 `docs/rag_eval_results.json` |
-| live Embedding | 未执行：EMBEDDING_API_KEY 未配置，不记为通过或失败 |
-| live LLM | 未执行：LLM_API_KEY 未配置，Phase 04 遗留项仍未验证 |
-| 测试后逐库只读计数 | `ecommerce_ops_test`、`ecommerce_ops_migration_test` 业务表行数均为 0，确认未遗留测试记录 |
+| `docker compose config --quiet` / `git diff --check` | 通过；仅 Windows LF/CRLF 提示 |
+| 本次开发库 `alembic current` / `alembic check` | **0002 (head)**；**No new upgrade operations detected**；均退出码 0，无新增 migration |
+| 开发库迁移与 setup（09-14 历史） | 升至 0002，checkpoint setup 成功 |
+| 开发数据保护（09-14 历史） | 迁移前后逐表计数及完整行内容哈希相同：原 12 表 64 条记录无改变 |
+| 逐库检查（修复轮历史） | 开发 64 条原记录、0 workflow；两个测试库应用记录均为 0；开发/普通测试库 checkpoint 数据为空，自有迁移 10 行保留 |
+| 本次范围与敏感信息核对 | 30 个 Phase 06 变更文件未发现本地凭据泄露或临时文件；原 commerce/audit 模型、RequestContext、0001、catalog/inventory、RAG 实现/数据未改，无下一阶段代码。本轮只更新状态文档并提交已审核改动 |
 
-pytest 子进程从 Settings 安全派生既有 `ecommerce_ops_test` 和 `ecommerce_ops_migration_test` URL，不输出凭据；迁移往返仅作用于专用空库。RAG smoke 同样在测试库外层事务内运行并回滚，未提交开发数据。未执行新镜像构建、部署、真实模型质量评估、正式认证端到端、负载或静态类型检查。
-
-阶段关闭核对：353 passed 后没有修改实现代码，仅更新文档/生成 Eval 报告；当前 app/scripts/tests 的 Python 源码修改时间均早于该次 pytest 缓存更新时间，与本任务执行记录一致。本轮仅更新阶段关闭文档，不重复完整测试。22 个阶段文件均属于 Phase 05，未发现本地凭据值、常见密钥模式、待提交临时文件或提前实现的 HITL/Checkpoint/业务写操作；知识入库写入属于已审核的 Phase 05 范围。原 Business Services、ORM、迁移、业务 Schema、可信身份及依赖文件未改。
+测试在真实 PostgreSQL 中实际提交独立随机 UUID 业务数据并精确清理；没有 SQLite 代替锁与并发证据。Audit 回滚场景曾发现失败节点 snapshot.next 为空，修复原确认重试检查后完整回归通过。live LLM/Embedding、Linux 新镜像、部署、生产认证和负载未验证。
 
 ## Next Recommended Step
 
-**等待 Phase 06 明确任务**。Phase 05 已获用户审核并正式关闭，具备下一阶段基础；本轮到此停止，不开始 HITL、Checkpoint 或业务写操作。live API 和真实检索质量保持未验证，Reranker 决策遵循第 25 项。
+**Phase 06 已正式关闭，等待 Phase 07 明确任务**。下一阶段宜使用专用任务并先读取本状态、README 和架构；本轮停止，不开始 Phase 07、Final Hardening 或 Observability。
 
 ## Change Log
+
+- 2026-09-15：用户确认 Phase 06 独立复审通过（P1/P2 closed，新 P0/P1 为 0，P3 deferred）并授权关闭。本次重新执行完整回归 454 passed in 93.88s，HITL 4 / restart 3 / concurrency 5 passed，Alembic 0002 (head) 且无漂移，静态检查通过；以 feat: complete phase 06 durable hitl and safe writes 提交，状态为 completed / awaiting Phase 07，未开始下一阶段。
+
+- 2026-09-15：修复历史订单/物流回放重新授权，新增 P1 12 项和 P2 10 项真实 PostgreSQL 回归；454 项全量、HITL 4 / restart 3 / concurrency 5 项 smoke 通过，移除父订单锁的反向验证按预期超额失败。P3 deferred；状态为 Phase 06 fixes implemented / awaiting independent re-review，保留未提交改动并停止。
 
 - 2026-09-12：V0.2 架构落盘；Phase 02.1 实现、40 项测试通过，随后获用户审核。
 - 2026-09-12：建立基线 b06d86a；Phase 02.2 迁移往返、64 条 Seed、六个 Service、67 项测试完成，改动未提交待审核。
@@ -199,3 +233,5 @@ pytest 子进程从 Settings 安全派生既有 `ecommerce_ops_test` 和 `ecomme
 - 2026-09-14：Phase 05 RAG 本地链路完成；未改原 ORM/迁移/Business Services，新增第七只读 Tool，353 项完整测试与真实 PostgreSQL Fake smoke 通过，13 条 Eval 指标见报告。未配置 live API，工作区待审核，未提交/部署/进入下一阶段。
 
 - 2026-09-14：用户审核通过 Phase 05；仅做阶段关闭，保留 Known Issues 和 Reranker 决策，按授权以 `feat: complete phase 05 rag knowledge retrieval` 提交。353 passed 后实现代码未改，不重复完整测试；状态为 completed / awaiting Phase 06，未开始后续功能。
+
+- 2026-09-14：Phase 06 设计审计后新增 0002/agent_workflows 与官方 PostgreSQL checkpoint；实现两类 Draft/HITL/Resume/幂等事务/Audit/API。432 项全量和 11 项分组 smoke 通过，三库 0002，开发原 64 条内容保持，临时 WSL 配置已移除；等待用户审核，未提交/部署/进入下一阶段。

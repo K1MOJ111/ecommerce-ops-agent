@@ -38,7 +38,7 @@ async def commerce_rows(db_session: AsyncSession) -> tuple[User, ProductSKU, Ord
 
 async def test_connection_schema_and_revision(db_engine: AsyncEngine, db_session: AsyncSession) -> None:
     await check_database(db_session)
-    assert await db_session.scalar(text("SELECT version_num FROM alembic_version")) == "0001"
+    assert await db_session.scalar(text("SELECT version_num FROM alembic_version")) == "0002"
     async with db_engine.connect() as connection:
         tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
     assert set(tables) == set(Base.metadata.tables) | {"alembic_version"}

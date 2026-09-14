@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.agent.llm import Message
 from app.schemas.tools import ToolResult
 
-Question = Literal["product", "sku", "color", "size", "order", "query"]
+Question = Literal["product", "sku", "color", "size", "order", "query", "order_item", "quantity", "amount", "reason"]
 Reason = Literal["write_operation", "policy_unavailable", "unsupported"]
 
 
@@ -54,3 +54,5 @@ class AgentState(TypedDict):
     errors: list[AgentError]
     decision: Decision | None
     final_response: FinalResponse | None
+    draft: dict | None
+    operation_result: dict | None
