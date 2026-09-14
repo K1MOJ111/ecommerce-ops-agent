@@ -1,6 +1,6 @@
 # ecommerce-ops-agent 架构设计 V0.2
 
-本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core 已落地；RAG/HITL/持久化会话/写操作仍未实现。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
+本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core、Phase 05 RAG 与第七个只读工具已落地；HITL/持久化会话/业务写操作仍未实现。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
 
 ## 1. 目标与业务范围
 
@@ -292,7 +292,7 @@ Phase 04 删除旧设计中的 resolved_entities：候选实体已经包含在 T
 
 ### Tool 合约
 
-Phase 03 已实现下表前六项；`search_after_sales_policy` 留到 RAG 阶段，不在当前 Registry 中。输入见 `app/schemas/tools.py`，固定 Service 适配及白名单见 `app/tools/registry.py`。现阶段订单 Tool 只接受 `order_no`，Service 仍保留双标识能力；没有修改 Phase 02 Service、ORM 或迁移。
+Phase 03 实现下表前六项，Phase 05 在原 Registry 增加 `search_after_sales_policy`。输入见 `app/schemas/tools.py`、`app/rag/schemas.py`。订单 Tool 只接受 `order_no`，Service 仍保留双标识能力；Phase 05 未修改原 Business Services、ORM 或迁移。
 
 | Tool | 模型可提供的主要参数 | 返回内容 |
 |---|---|---|
@@ -302,9 +302,9 @@ Phase 03 已实现下表前六项；`search_after_sales_policy` 留到 RAG 阶�
 | get_inventory | sku_id、可选仓库编码 | 可售库存、查询时间 |
 | get_order | order_no | 已授权订单状态、金额和明细 |
 | get_logistics | order_no | 已授权订单的包裹、商品数量、运单、最新状态和同步时间 |
-| search_after_sales_policy | query、可选 product_id/category_code/order_id | 适用规则片段、文档/版本/分块 ID、来源与定位 |
+| search_after_sales_policy | query、可选 product_id/category/relevant_date/limit | 规则片段、文档/版本/分块 ID、来源、定位、适用范围和检索名次 |
 
-工具参数不包含 actor_id 或 permissions。涉及 order_id 的规则查询同样先检查订单归属，规则适用时间由已授权订单记录派生，不直接相信模型给出的日期。
+工具参数不包含 actor_id 或 permissions。按 Phase 05 明确范围，政策工具不接受 order_id、不读取订单；订单先经过原 get_order 授权，再核对商品/SKU。relevant_date 仅是显式查询条件，不能被当作可信历史政策适用结论；订单事件时间选择及历史商品品类仍未自动解决。这替代此前关于本阶段直接接收 order_id 的设想。
 
 Phase 03 统一 `ToolResult[T]` 包含 status、具体类型的 data、source（工具名）、queried_at、可信 request_id 及可公开的 error。状态为 success、not_found、forbidden、invalid_argument、temporarily_unavailable。商品/SKU 空列表或实体缺失为 not_found；已授权订单无包裹仍为 success；库存缺记录不等于已知零库存。物流保留 synced_at。
 
@@ -329,13 +329,17 @@ Phase 02 不实现完整 JWT 登录，但可信服务端上下文从工程入口
 3. 查询本人订单要求 orders:read:self，查询条件包含 orders.user_id = actor_id。只有明确授予 orders:read:any 的服务端上下文才可跨用户查询，不能仅凭 operator 文本标签放行。
 4. 物流查询、通过订单派生的售后查询也走相同订单归属检查；不允许从另一条工具路径绕过。
 5. 业务服务重复承担最后的权限检查，不能只在路由或提示词中限制。所有工具使用最小返回字段，默认不向模型输出完整地址、电话等隐私信息。
-6. Phase 03 白名单只含六个已实现只读工具；第七项售后规则检索留待 RAG。未注册工具、写操作或动态 SQL 一律拒绝。运行时只读查询与迁移/数据导入权限分离仍是正式开放前的待实现要求。
+6. Phase 05 白名单含七个已实现只读工具；入库不是 Tool。未注册工具、写操作或动态 SQL 一律拒绝。运行时只读查询与迁移/数据导入权限分离仍是正式开放前的待实现要求。
 7. 商品描述、检索文档和用户文本均为不可信数据，其中出现的指令不能修改系统权限、工具列表或执行上限。
 8. 设置输入长度、分页上限、参数类型、超时和错误转换。日志脱敏，不记录密钥、完整消息正文和敏感工具结果。
 
 后续正式认证替换可信上下文的来源，保持业务服务的归属校验不变。写操作阶段再增加操作申请、人工确认、重新校验状态、幂等事务执行与审计；不在本轮预建通用工作流。
 
 ## 7. RAG 边界
+
+Phase 05 实际实现：现有两张知识表 + 空行规则分块/字符 locator + httpx Embedding Adapter + 精确余弦与简单关键词召回 + RRF。两路均过滤状态、有效期和范围，同 key 选择适用最高版本。现有 `Vector()` 足够：请求响应验证维度，SQL CASE 排除异模型/异维度的距离运算，不修改首迁移。关键词允许召回非当前向量空间的已发布原文，不将其伪装为向量命中。
+
+入库使用 SHA-256、文档业务键事务锁及 SAVEPOINT；同版本重复跳过，草稿内容更新原子替换 chunk，已发布/归档内容变更须升版本。保持原始文档版本不变时可重建派生 chunk；命令负责整批提交。规则冲突不自动裁决，scope 不是优先级。全部样例显式标注模拟数据。操作命令、参数和 Eval 口径见 [README](../README.md#phase-05-售后知识检索)。
 
 RAG（检索增强生成）用于相对稳定的售后政策和说明资料。价格、库存、订单和物流仍由数据库工具查询，不能从旧知识片段中推断实时业务事实。
 

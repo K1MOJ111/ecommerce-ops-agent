@@ -1,0 +1,151 @@
+{
+  "provider": "fake-char-bigram-256-v1",
+  "k": 3,
+  "positive_cases": 7,
+  "negative_cases": 6,
+  "hit_at_k": 1.0,
+  "mrr": 1.0,
+  "no_result_accuracy": 1.0,
+  "scope_accuracy": 1.0,
+  "cases": [
+    {
+      "id": "return-current",
+      "found": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "exchange-category",
+      "found": [
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "shirt-specific",
+      "found": [
+        [
+          "demo-shirt",
+          1,
+          0
+        ],
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "shipping",
+      "found": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "shipped-cancel",
+      "found": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "food",
+      "found": [
+        [
+          "demo-food",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "historic-return",
+      "found": [
+        [
+          "demo-return",
+          1,
+          0
+        ]
+      ],
+      "expected_rank": 1,
+      "expected_empty": false,
+      "scope_ok": true
+    },
+    {
+      "id": "expired-excluded",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    },
+    {
+      "id": "draft-excluded",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    },
+    {
+      "id": "archived-excluded",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    },
+    {
+      "id": "future-excluded",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    },
+    {
+      "id": "unknown",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    },
+    {
+      "id": "no-category-scope",
+      "found": [],
+      "expected_rank": null,
+      "expected_empty": true,
+      "scope_ok": true
+    }
+  ],
+  "smoke": "passed: ingestion + PostgreSQL/pgvector + Registry + LangGraph + multi-tool Evidence; rolled back"
+}

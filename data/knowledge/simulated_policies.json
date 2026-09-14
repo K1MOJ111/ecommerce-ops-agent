@@ -1,0 +1,15 @@
+{
+  "purpose": "全部为开发测试模拟规则，不代表任何真实平台官方政策。商品 UUID 来自 scripts.seed_data。",
+  "documents": [
+    {"document_key":"demo-return","version":1,"title":"模拟旧版退货规则","source_uri":"fixture://after-sales/return/v1","content":"【开发测试模拟规则】退货：签收后五天内可申请非质量问题退货，商品须未使用且包装完整。","status":"published","scope_type":"global","valid_from":"2026-01-01T00:00:00Z","valid_to":"2026-06-01T00:00:00Z"},
+    {"document_key":"demo-return","version":2,"title":"模拟退货规则","source_uri":"fixture://after-sales/return/v2","content":"【开发测试模拟规则】退货：签收后七天内可申请非质量问题退货，商品须未使用且包装完整。\n\n【开发测试模拟规则】签收后发现商品质量问题，保留照片和订单凭证，由人工核验后确认售后方案。","status":"published","scope_type":"global","valid_from":"2026-06-01T00:00:00Z"},
+    {"document_key":"demo-exchange","version":1,"title":"模拟服装换货规则","source_uri":"fixture://after-sales/clothing","content":"【开发测试模拟规则】服装换货：尺码不合适时，签收后七天内可申请换货；吊牌须完整，商品不得洗涤或穿着使用。","status":"published","scope_type":"category","category_code":"clothing","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-shirt","version":1,"title":"模拟短袖质量补充规则","source_uri":"fixture://after-sales/shirt","content":"【开发测试模拟规则】纯棉短袖首次洗涤出现开线等质量问题，签收后十五天内提供照片与洗涤说明，由人工核验。此条仅适用指定短袖商品。","status":"published","scope_type":"product","product_id":"1ceabd9c-f32f-5e11-9852-e238b0db9c4e","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-shipping","version":1,"title":"模拟发货时效","source_uri":"fixture://after-sales/shipping","content":"【开发测试模拟规则】发货时效：付款后四十八小时内安排发货；预售商品按商品页面约定时间发货。\n\n【开发测试模拟规则】已发货订单申请取消时，先查询物流，再由人工确认能否拦截；本规则不代表已经取消订单或批准退款。","status":"published","scope_type":"global","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-food","version":1,"title":"模拟食品适用规则","source_uri":"fixture://after-sales/food","content":"【开发测试模拟规则】食品开封后非质量问题不支持退货；发现质量问题请保留包装及照片，交由人工核验。","status":"published","scope_type":"category","category_code":"food","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-expired","version":1,"title":"模拟过期补贴规则","source_uri":"fixture://after-sales/expired","content":"【开发测试模拟规则】春季运费补贴仅在活动有效期内受理，过期不适用。","status":"published","scope_type":"global","valid_from":"2026-03-01T00:00:00Z","valid_to":"2026-04-01T00:00:00Z"},
+    {"document_key":"demo-draft","version":1,"title":"模拟草稿赔付规则","source_uri":"fixture://after-sales/draft","content":"【开发测试模拟规则】草稿暗号紫晶赔付，仅供编辑，禁止对外引用。","status":"draft","scope_type":"global","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-archived","version":1,"title":"模拟归档规则","source_uri":"fixture://after-sales/archived","content":"【开发测试模拟规则】归档暗号琥珀赔付，该版本已经归档，禁止对外引用。","status":"archived","scope_type":"global","valid_from":"2026-01-01T00:00:00Z"},
+    {"document_key":"demo-future","version":1,"title":"模拟未来规则","source_uri":"fixture://after-sales/future","content":"【开发测试模拟规则】未来暗号翡翠福利，生效前不得引用。","status":"published","scope_type":"global","valid_from":"2027-01-01T00:00:00Z"}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "purpose": "小型开发检索回归集；Fake Embedding 的分数不代表真实语义检索质量。expected 为任一可接受 document_key/version/chunk_index。",
+  "k": 3,
+  "cases": [
+    {"id":"return-current","query":"退货","expected":[["demo-return",2,0]],"scope":["global"]},
+    {"id":"exchange-category","query":"尺码不合适换货","category":"clothing","expected":[["demo-exchange",1,0]],"scope":["global","category"]},
+    {"id":"shirt-specific","query":"首次洗涤开线","product_id":"1ceabd9c-f32f-5e11-9852-e238b0db9c4e","expected":[["demo-shirt",1,0]],"scope":["global","category","product"]},
+    {"id":"shipping","query":"发货时效","expected":[["demo-shipping",1,0]],"scope":["global"]},
+    {"id":"shipped-cancel","query":"已经发货能否拦截","expected":[["demo-shipping",1,0]],"scope":["global"]},
+    {"id":"food","query":"食品开封","category":"food","expected":[["demo-food",1,0]],"scope":["global","category"]},
+    {"id":"historic-return","query":"退货","relevant_date":"2026-05-01T00:00:00Z","expected":[["demo-return",1,0]],"scope":["global"]},
+    {"id":"expired-excluded","query":"春季运费补贴","expected":[],"scope":["global"]},
+    {"id":"draft-excluded","query":"紫晶","expected":[],"scope":["global"]},
+    {"id":"archived-excluded","query":"琥珀","expected":[],"scope":["global"]},
+    {"id":"future-excluded","query":"翡翠","expected":[],"scope":["global"]},
+    {"id":"unknown","query":"星际跃迁","expected":[],"scope":["global"]},
+    {"id":"no-category-scope","query":"尺码","expected":[],"scope":["global"]}
+  ]
+}

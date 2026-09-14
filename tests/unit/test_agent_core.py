@@ -66,7 +66,7 @@ async def test_search_roundtrip(fake_model, harness):
     sent = model.requests[1][0][-1]
     assert sent["role"] == "tool" and sent["tool_call_id"] == "call-1-0"
     assert json.loads(sent["content"])["data"][0]["product_code"] == "P001"
-    assert len(model.requests[0][1]) == 6
+    assert len(model.requests[0][1]) == 7
     assert len(harness[4]) == len(harness[5]) == 1
 
 
@@ -91,7 +91,7 @@ async def test_policy_unavailable(fake_model, harness):
     assert state["tool_call_count"] == 0
 
 
-@pytest.mark.parametrize("tool", ["cancel_order", "refund", "search_after_sales_policy", "__import__"])
+@pytest.mark.parametrize("tool", ["cancel_order", "refund", "ingest_knowledge", "__import__"])
 async def test_unregistered_never_executed(tool, fake_model, harness):
     state = await run(fake_model([(tool, {})]), harness)
     assert state["evidence"][0].result.status == "invalid_argument"

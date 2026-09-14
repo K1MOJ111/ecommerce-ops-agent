@@ -21,7 +21,7 @@ def context() -> RequestContext:
 
 
 def test_registry_and_schemas() -> None:
-    assert set(TOOLS) == {"search_products", "get_product", "list_product_skus", "get_inventory", "get_order", "get_logistics"}
+    assert set(TOOLS) == {"search_products", "get_product", "list_product_skus", "get_inventory", "get_order", "get_logistics", "search_after_sales_policy"}
     assert get_tool("get_product").name == "get_product"
     with pytest.raises(KeyError):
         get_tool("cancel_order")
@@ -30,7 +30,7 @@ def test_registry_and_schemas() -> None:
     with pytest.raises(FrozenInstanceError):
         get_tool("get_order").requires_context = False
     schemas = tool_schemas()
-    assert len(schemas) == 6
+    assert len(schemas) == 7
     for schema in schemas:
         params = schema["parameters"]
         assert params["additionalProperties"] is False
@@ -46,7 +46,7 @@ def test_registry_and_schemas() -> None:
     assert get_tool("search_products").schema()["parameters"]["properties"]
 
 
-@pytest.mark.parametrize("name", ["cancel_order", "refund", "search_after_sales_policy", "app.services.orders.get_order", "__import__", "", None, []])
+@pytest.mark.parametrize("name", ["cancel_order", "refund", "ingest_knowledge", "app.services.orders.get_order", "__import__", "", None, []])
 async def test_unregistered_tool(name: object, context: RequestContext) -> None:
     session = AsyncMock()
     result = await invoke_tool(name, {}, session=session, context=context)
@@ -91,6 +91,7 @@ async def test_untrusted_extra_fields_rejected(name: str, field: str, context: R
         "search_products": {"query": "shirt"}, "get_product": {"product_id": str(uuid4())},
         "list_product_skus": {"product_id": str(uuid4())}, "get_inventory": {"sku_id": str(uuid4())},
         "get_order": {"order_no": "SEED-O001"}, "get_logistics": {"order_no": "SEED-O001"},
+        "search_after_sales_policy": {"query": "退货"},
     }[name]
     service = AsyncMock()
     result = await replace(get_tool(name), service=service).invoke(

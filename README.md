@@ -119,7 +119,7 @@ Service 接收短期 AsyncSession，返回 Pydantic 结构；不提交事务、�
 
 ## 只读 Business Tools
 
-`app/tools/registry.py` 的固定白名单包含 `search_products`、`get_product`、`list_product_skus`、`get_inventory`、`get_order`、`get_logistics`。`get_tool(name)` 查找工具，未注册名称抛出 `KeyError`；模型调用统一经过 `invoke_tool`，未注册名称返回 `invalid_argument / unknown_tool`。`tool_schemas()` 返回每个工具的名称、说明、输入 JSON Schema 和具体类型的输出 JSON Schema，尚未绑定任何模型供应商。
+`app/tools/registry.py` 的固定白名单包含 `search_products`、`get_product`、`list_product_skus`、`get_inventory`、`get_order`、`get_logistics`、`search_after_sales_policy`。`get_tool(name)` 查找工具，未注册名称抛出 `KeyError`；模型调用统一经过 `invoke_tool`，未注册名称返回 `invalid_argument / unknown_tool`。`tool_schemas()` 返回输入和输出 JSON Schema；Agent 将输入 Schema 交给 OpenAI-compatible Adapter。
 
 ```python
 from app.tools.registry import invoke_tool, tool_schemas
@@ -139,6 +139,7 @@ payload = result.model_dump(mode="json")
 | list_product_skus | 必填 `product_id` UUID；可选 `specs` 最多 8 项，键 1–64、值 1–100 字符；`limit` 默认 100、范围 1–100 |
 | get_inventory | 必填 `sku_id` UUID；可选 `warehouse_code` 1–100 字符 |
 | get_order / get_logistics | 必填 `order_no` 1–100 字符；当前 Tool 不暴露 `order_id` |
+| search_after_sales_policy | `query` 1–200 字符；可选 `product_id`、`category`、带时区的 `relevant_date`、`limit` 1–100（默认 RAG_TOP_K） |
 
 字符串过滤值去除首尾空白；`limit` 不接受布尔值、浮点数或数字字符串。所有额外字段均拒绝，包括 `actor_id`、`permissions`、`request_id`、`role`、`context` 和 `sql`。`category` 仅在适配 Service 时转换为 `category_code`。
 
@@ -150,7 +151,7 @@ payload = result.model_dump(mode="json")
 - 订单 Service 始终执行授权。customer/self 范围下，他人订单和不存在订单均为 `forbidden`，不泄露存在性；可信 `orders:read:any` 范围下的缺失订单为 `not_found`。operator 标签不授权。
 - 参数校验和 Service 参数错误：`invalid_argument`；连接/连接池/命令超时、断连及已识别 PostgreSQL 临时故障：`temporarily_unavailable`。代码错误、非临时数据库错误和错误输出结构继续抛出，由未来调用边界处理，不伪装成可重试故障。
 
-Tool 不创建或提交事务，不重写 SQL/业务规则。Phase 04 Agent 按查询创建短期 AsyncSession，异常后关闭/回滚该会话，不在失败事务上继续查询；现有 Engine 的连接、命令和连接池超时仍生效。没有自动重试器、RAG 或新增业务 HTTP 接口，正式认证仍默认拒绝。
+Tool 不创建或提交事务，不重写 SQL/业务规则。Agent 按查询创建短期 AsyncSession，异常后关闭/回滚该会话，不在失败事务上继续查询；现有 Engine 的连接、命令和连接池超时仍生效。Phase 05 增加 RAG，没有自动重试器或新增业务 HTTP 接口，正式认证仍默认拒绝。
 
 单元测试可运行 `.venv/Scripts/python.exe -m pytest -q tests/unit/test_tool_contracts.py`。完整 PostgreSQL 测试使用前文两个测试库环境变量执行 `pytest -q`；包含真实表锁等待超时转换和六工具只执行 SELECT 的检查。依赖、编译及 Compose 验证命令为 `python -m pip check`、`python -m compileall app tests`、`docker compose config --quiet`。
 
@@ -195,4 +196,43 @@ response = state["final_response"]
 
 `scripts.agent_smoke` 使用 Fake Model 读取已有开发 Seed，不运行 Seed、不调用外部模型。若缺少开发样例则断言失败。容器检查使用独立镜像 `ecommerce-ops-agent:phase04-check` 和临时容器，不替换已有 API。具体已运行命令见 PROJECT_STATE.md。
 
-LangGraph 带入 checkpoint 包是依赖关系，本项目没有启用 checkpointer、保存会话或新增相关表；也没有 RAG/HITL/写操作。
+LangGraph 带入 checkpoint 包是依赖关系，本项目没有启用 checkpointer、保存会话或新增相关表；也没有 HITL 或业务写操作。
+
+## Phase 05 售后知识检索
+
+代码位于 `app/rag/`，复用现有知识表、httpx 和 pgvector，无新依赖或迁移。`data/knowledge/simulated_policies.json` 的 10 份文档全部是开发测试模拟规则，`fixture://` 是本地来源标识，不是官方网站或可访问链接。
+
+显式入库（默认使用已配置的真实 Embedding，`--fake` 明确选择模拟向量）：
+
+```powershell
+# 仅 development/test；模拟商品范围依赖已有 Seed，不会由入库脚本自动运行 Seed。
+.venv/Scripts/python.exe -m scripts.ingest_knowledge --fake
+# 自备同结构 JSON；不传 --fake 时要求已有 EMBEDDING_* 配置。
+.venv/Scripts/python.exe -m scripts.ingest_knowledge --source data/knowledge/simulated_policies.json
+```
+
+同一 document_key/version 使用内容 SHA-256 和元数据判断重复；一致时跳过。草稿变更会在同一事务替换旧 chunk，Embedding 失败保留旧内容；已 published/archived 版本不允许改内容或元数据，须新增版本。同内容可因模型或分块配置变化显式重建 chunk。命令整批提交，任何异常整批回滚，应用启动不执行入库。
+
+空行分隔完整规则，目标 `RAG_CHUNK_SIZE=800` 字符、`RAG_CHUNK_OVERLAP=100` 字符；重叠仅复用整段。单段超长仍完整保留，可能超过供应商输入限制，此时入库失败而非截断规则。locator 记录规范化文档中的字符起止位置（左闭右开）及段落范围。
+
+Embedding 配置为 `EMBEDDING_BASE_URL`（不带 `/embeddings`）、`EMBEDDING_API_KEY`、`EMBEDDING_MODEL`、可选 `EMBEDDING_DIM`、`EMBEDDING_TIMEOUT_SECONDS=30`。维度从实际响应验证，不传猜测维度；同时校验响应索引、条数、非零有限向量和模型标识。模型/版本标签必须稳定，换向量空间须重新生成；Fake 的 256 维由字符二元组哈希算法定义，不代表真实语义能力。使用 Fake 时 DIM 留空或为 256。
+
+检索的两路候选都应用 published、`valid_from <= date < valid_to`、global/category/product 范围过滤；同 document_key 取对查询范围和日期有效的最高版本。传商品 ID 时从真实商品读取当前品类，冲突品类参数拒绝，未知或下架商品返回无结果。未提供范围时只搜全局规则。
+
+向量通道仅计算相同模型/维度的精确余弦相似度，默认下限 `RAG_MIN_SIMILARITY=0.2`；关键词通道使用绑定并转义的整问、英文词和中文二元组子串。各取 `4 × K` 候选，通过 RRF `sum(1/(60+rank))` 去重排序，最终 K 默认 5、上限 100。没有 Reranker、复杂全文搜索或近似索引。阈值及中文召回质量需在真实模型和业务数据上重新评估。
+
+Tool 返回文档/分块 ID、版本、title、原文、locator、source_uri、citation、适用范围、有效期、检索日期、候选来源/名次和融合分数；外层保留 queried_at。分数不是正确概率。无候选为 not_found，Embedding 未配置或不可用且需要检索时为 temporarily_unavailable，不静默降级成成功。
+
+Agent 继续使用原图和 Evidence：订单 → 按名称快照搜索商品 → 查询 SKU 并核对订单 SKU ID → 商品政策；不能核对时不认定商品归属。`relevant_date` 是可选的带时区查询条件，省略时用现在；不是可信历史事件日期。没有历史品类快照、政策冲突自动裁决或退款批准。知识内容只进入 tool 消息，不能改变可信身份、Registry 或系统消息。
+
+完整 Fake RAG smoke 与 Eval（先按前文配置测试库并运行迁移；结果数据回滚，不写开发业务库）：
+
+```powershell
+# TEST_DATABASE_URL 指向既有 ecommerce_ops_test。
+.venv/Scripts/python.exe -m scripts.rag_smoke
+# 如需记录本次结果，显式给出报告文件；已有报告请另命名以保留历史。
+.venv/Scripts/python.exe -m scripts.rag_smoke --report docs/rag_eval_results.local.json
+.venv/Scripts/python.exe -m compileall app scripts tests
+```
+
+Eval 数据集为 `data/knowledge/retrieval_eval.json`：7 个正常/历史查询、6 个无结果边界。正样本报告 Hit@3 和 MRR，负样本单独报告无结果准确率，另报范围正确率。实际本轮结果见 [Eval 报告](docs/rag_eval_results.json) 和 PROJECT_STATE；Fake 指标仅验证本地检索实现，不能证明真实 Embedding 或 LLM 质量。
