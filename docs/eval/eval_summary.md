@@ -2,6 +2,8 @@
 
 本报告区分自动化测试、脚本化 Fake 控制实验和 Live 效果评估。原 Phase 05 的 13 条查询与 `docs/rag_eval_results.json` 保留不变；454 项历史 pytest 没有作为业务 Eval 样本计数。
 
+全部 Seed、Fixture 与评估输入均为 development / test fixtures，不含真实客户或平台内部订单资料；政策是显式模拟规则。下列数值为 2026-09-15 Phase 07 已保存的结果，公开文档调整不代表重新执行评估。
+
 ## 数据与运行
 
 - Agent `agent-v1.1`：46 个独立业务/对抗案例；字段包括输入、可信上下文、隔离夹具、预设模型脚本与独立评分预期。包含 37 个只读案例、9 个持久化工作流案例。Fake 仅接收 `setup.script`，Live 仅接收正常系统消息、用户输入和工具结果；评分预期不进入 Prompt。
@@ -111,4 +113,4 @@ python -m scripts.agent_eval rag --live --report docs/eval/live_rag_eval_results
 
 ## 阶段边界
 
-Phase 07 离线交付已获用户审核通过，按授权提交收口，状态为 `Phase 07 offline completed / awaiting public release and Phase 08`。Live 两项缺配置阻塞、未验证；最终467 passed后实现逻辑未变；本次仅清理共享夹具文件一个末尾空行（AST相同）并更新收口文档，受影响HITL测试85 passed in 33.48s，未重复完整回归。未公开发布、部署或进入 Phase 08。保留正式认证、数据库最小权限、agent_workflows JSONB DB CHECK、data retention、production deployment、backup/restore、load validation。Phase 08 的具体执行仍需用户另行授权。
+Phase 07 离线交付已关闭，稳定提交为 `75da7718e2ac35e55f072d36bd90c28c19f7b75a`；Phase 08 未开始。Live 两项缺配置阻塞、未验证。阶段关闭时，467 passed 后仅调整文档及共享夹具末尾空行（AST 相同），受影响 HITL 测试补跑 85 passed in 33.48s。尚未公开发布或部署；正式认证、数据库最小权限、agent_workflows JSONB DB CHECK、数据保留、生产部署、备份恢复与负载验证均未完成。

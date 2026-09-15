@@ -1,6 +1,6 @@
-# ecommerce-ops-agent 架构设计 V0.2
+# Ecommerce Ops Agent Architecture
 
-本文件描述目标架构，不表示全部能力已经实现。当前阶段、实际目录、完成状态与待验证事项统一见 [PROJECT_STATE.md](../PROJECT_STATE.md)。Phase 02 数据库与 Service、Phase 03 六个只读 Tools、Phase 04 LangGraph Read-only Agent Core、Phase 05 RAG 与第七个只读工具已落地；Phase 06 在原图上增加 HITL、持久化 checkpoint 和两类受控写操作，具体审计与边界见本文件 Phase 06 节。原始 V0.2 文档保留在 [Phase 01 快照](history/phase01/docs/architecture.md)。
+本文件记录当前实现与保留的设计目标；未实现项明确标注。Phase 02–07 已完成本地离线交付，涵盖业务查询、LangGraph、RAG、持久化 HITL、受控写入及 Eval/Observability；Phase 08 未开始。当前状态与验证边界见 [PROJECT_STATE.md](../PROJECT_STATE.md)，指标与失败分析见 [Eval Summary](eval/eval_summary.md)。原始 V0.2 设计保留在 [Phase 01 快照](history/phase01/docs/architecture.md)，不作为当前能力清单。
 
 ## 1. 目标与业务范围
 
@@ -26,12 +26,17 @@ flowchart TD
     CTX --> APP[应用服务]
     APP --> G[LangGraph 单 Agent]
     G --> LLM[兼容 API 客户端]
-    G --> T[只读 Tool 层]
+    G --> T[Tool Registry / 只读与 Draft 白名单]
     T --> B[商品 / 库存 / 订单 / 物流业务服务]
     T --> R[RAG 检索服务]
     B --> DB[(PostgreSQL)]
     R --> DB
     R --> EMB[Embedding API]
+    T --> D[持久化操作草稿]
+    D --> H[HITL interrupt / PostgresSaver]
+    H --> C[显式确认 / 当前权限与状态重检]
+    C --> W[业务写事务 / Audit / 幂等回执]
+    W --> DB
     INGEST[独立知识导入流程] --> EMB
     INGEST --> DB
 ```
@@ -214,7 +219,7 @@ paid_amount 表示历史成功收款金额，退款不直接扣减该字段，�
 
 pg_trgm 仅定义为商品名称和文本的辅助模糊匹配能力；可针对实际查询建立对应索引。中文关键词检索效果未验证，不能将扩展存在视为检索有效。
 
-pgvector 首版从精确向量检索开始；数据量、查询计划和耗时证明必要时再评估近似向量索引。按用户 Phase 02 最新要求，首迁移使用不固定维度的 `vector`，SQLAlchemy 使用 `Vector()`，不创建近似向量索引。官方确认支持这种存储方式，见 [pgvector 可变维度说明](https://github.com/pgvector/pgvector#can-i-store-vectors-with-different-dimensions-in-the-same-column)。
+pgvector 首版从精确向量检索开始；数据量、查询计划和耗时证明必要时再评估近似向量索引。首迁移使用不固定维度的 `vector`，SQLAlchemy 使用 `Vector()`，不创建近似向量索引。参考 [pgvector 可变维度说明](https://github.com/pgvector/pgvector#can-i-store-vectors-with-different-dimensions-in-the-same-column)。
 
 这覆盖并替代原 V0.2 “首迁移固定 vector(D)、启动时核对维度”的安排；不是暗中选择某个维度。未来 RAG 阶段确定模型后，再决定是否用 Alembic 改为 `vector(D)` 并增加配置一致性检查。转换前必须处理已有异维向量；换模型或维度须重新生成 Embedding，不能仅改模型标签或强行截断。未固定维度不代表可混合计算距离：同一检索集合必须使用相同模型/版本与维度，不同维度的距离运算会被 PostgreSQL 拒绝。同维度也不等于同一向量空间。
 
@@ -242,6 +247,8 @@ pgvector 首版从精确向量检索开始；数据量、查询计划和耗时�
 ## 5. LangGraph 设计
 
 单 Agent、显式 State、有限 Tool Loop（带调用上限的工具循环）。不增加独立分类、规划或审核 Agent。
+
+下图与本节 Phase 04 合约描述保留的只读 `run_agent` 入口；持久化入口增加的 `confirm_operation`、Draft 和结果字段见 Phase 06 节。
 
 ```mermaid
 flowchart TD
@@ -333,29 +340,29 @@ Phase 02 不实现完整 JWT 登录，但可信服务端上下文从工程入口
 7. 商品描述、检索文档和用户文本均为不可信数据，其中出现的指令不能修改系统权限、工具列表或执行上限。
 8. 设置输入长度、分页上限、参数类型、超时和错误转换。日志脱敏，不记录密钥、完整消息正文和敏感工具结果。
 
-后续正式认证替换可信上下文的来源，保持业务服务的归属校验不变。写操作阶段再增加操作申请、人工确认、重新校验状态、幂等事务执行与审计；不在本轮预建通用工作流。
+后续正式认证替换可信上下文的来源，保持业务服务的归属校验不变。Phase 06 已实现操作草稿、人工确认、重新校验、幂等事务与审计；写工具仅在持久化入口开放，不提供通用工作流。
 
 ## 7. RAG 边界
 
 Phase 05 实际实现：现有两张知识表 + 空行规则分块/字符 locator + httpx Embedding Adapter + 精确余弦与简单关键词召回 + RRF。两路均过滤状态、有效期和范围，同 key 选择适用最高版本。现有 `Vector()` 足够：请求响应验证维度，SQL CASE 排除异模型/异维度的距离运算，不修改首迁移。关键词允许召回非当前向量空间的已发布原文，不将其伪装为向量命中。
 
-入库使用 SHA-256、文档业务键事务锁及 SAVEPOINT；同版本重复跳过，草稿内容更新原子替换 chunk，已发布/归档内容变更须升版本。保持原始文档版本不变时可重建派生 chunk；命令负责整批提交。规则冲突不自动裁决，scope 不是优先级。全部样例显式标注模拟数据。操作命令、参数和 Eval 口径见 [README](../README.md#phase-05-售后知识检索)。
+入库使用 SHA-256、文档业务键事务锁及 SAVEPOINT；同版本重复跳过，草稿内容更新原子替换 chunk，已发布/归档内容变更须升版本。保持原始文档版本不变时可重建派生 chunk；命令负责整批提交。规则冲突不自动裁决，scope 不是优先级。全部样例显式标注模拟数据。操作命令见 [README](../README.md#quick-start)，评估口径见 [Eval Summary](eval/eval_summary.md)。
 
 RAG（检索增强生成）用于相对稳定的售后政策和说明资料。价格、库存、订单和物流仍由数据库工具查询，不能从旧知识片段中推断实时业务事实。
 
-### 首版流程
+### 当前检索流程
 
 ```text
 独立导入：可信资料 → 文档版本/范围/有效期 → 分块与定位 → Embedding → PostgreSQL
-在线查询：问题及可信业务范围 → 必要过滤 → 向量检索 + 简单关键词/模糊检索
-          → 去重、简单排名合并、截取结果 → 带原文证据和出处回答
+在线查询：问题及经校验的范围 → 发布/日期/范围过滤 → 精确向量检索 + 简单关键词
+          → RRF 合并、去重、截取结果 → 带原文证据和出处回答
 ```
 
 - 必要过滤包含发布可见性、商品/品类适用范围、有效期及资料访问范围，两条检索路径应用相同过滤。
-- 通用问题使用当前适用规则；具体订单问题使用经权限检查的下单时间及商品信息。历史已发布版本按有效期可用于历史订单，不能一律因 archived 被排除，也不能向当前问题错误套用过期规则。
-- 同一范围的版本有效期不应冲突；导入/发布流程负责检查。全局、品类和商品规则存在未声明的矛盾时展示冲突或说明无法确定，不让模型自行裁定优先级。
+- 当前仅检索 published 文档；日期由显式 relevant_date 或当前时间给出，未自动从订单事件派生。archived 文档不会返回，历史品类快照与完整历史政策适用仍未解决。
+- 同 key 选择适用最高版本；没有完整的发布有效期冲突检查与跨文档规则裁决。全局/品类/商品 scope 不能被解释为优先级。
 - 第一版没有 Reranker（对候选资料进行额外模型排序的组件），也不安装其依赖或预建模块。去重和简单排名合并不等于已验证的检索质量。
-- pg_trgm 只作为商品名称和文本的辅助模糊匹配。简单关键词匹配与中文语义检索不是同一能力，中文短词、别名和错别字的效果均未验证。
+- 数据库安装 pg_trgm，但当前商品搜索是字面子串，RAG 关键词使用中文二元组、英文词与字面匹配；未使用 pg_trgm 相似度排序。真实中文语义召回尚未验证。
 - 必须用真实测试数据和后续 Eval（固定样本上的效果评估）确认中文召回、排序与引用质量；只有 Eval 显示明显排序问题，才评估是否需要 Reranker。
 - 来源应包含 document_id、version、chunk_id、source_uri、locator；引用必须对应真实返回的片段，不能只生成一个看似合理的链接。
 - 缺失适用规则、历史版本或可靠来源时明确无法确认，不把相似度当作正确概率，也不将规则解释等同退款批准。

@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-> 更新：2026-09-15。先读本文件，再按任务读 [架构](docs/architecture.md)、[运行说明](README.md) 和相关代码。最新用户指令、已验证实际状态优先于本摘要；发现冲突须指出并同步。历史使用 Git，不新建重复文档备份。
+> 更新：2026-09-15。技术状态与验证摘要；入口见 [README](README.md)、[架构](docs/architecture.md) 和 [Eval Summary](docs/eval/eval_summary.md)。以最新明确范围和已验证仓库事实为准，历史版本由 Git 保存。
 
 ## Project Goal
 
@@ -10,10 +10,10 @@
 
 **Phase 07 offline completed / awaiting public release and Phase 08**。
 
-- 起点是正式关闭的 Phase 06 `d570374`，进入时工作区干净；依当前仓库核对，没有依据旧任务重做设计。
-- 独立 Agent 46条（agent-v1.1）、RAG 33条（rag-v2.0）、三路检索消融、结构化日志与报告已实现和实际运行；完整467项测试通过。
-- 用户已审核通过 Offline Agent Eval、Offline RAG Eval 与 Observability，并授权本阶段提交关闭。Live LLM / Embedding 均 blocked by missing configuration，兼容性与真实质量未验证。
-- 未新增业务 Tool、写能力、依赖、数据库 Schema、Reranker 或监控平台；本轮只更新收口文档并提交，未公开发布、部署或进入 Phase 08。
+- Phase 07 稳定提交：`75da7718e2ac35e55f072d36bd90c28c19f7b75a`；本次公开准备开始时 `master` 工作区干净。
+- Agent 46 条（agent-v1.1）、RAG 33 条（rag-v2.0）、三路消融与结构化日志已实现；阶段关闭时完整 467 项测试通过。
+- Live LLM / Embedding 均 blocked by missing configuration，兼容性与真实质量未验证。
+- Public Release Check 已审核通过；MIT LICENSE、公开展示文档与忽略规则纳入本地收口提交 `docs: prepare public preview release`。未配置 remote、push、创建 tag/Release、部署或开始 Phase 08。
 
 ## Confirmed Architecture
 
@@ -59,7 +59,7 @@
 | `pyproject.toml`、`requirements.lock`、Docker/Compose 配置 | 工程与运行依赖 |
 | `docs/architecture.md`、`README.md` | 架构细节与可复制命令 |
 
-初始 Git 基线：`b06d86a`；Phase 02 收口：`6acea32 feat: complete phase 02 data and query services`。Phase 03 开始时工作区干净，4 个新文件、3 个文档修改随 `feat: complete phase 03 business tools` 阶段关闭提交纳入版本控制。未修改全局 Git 配置、配置远程或推送。`.env`、`.venv`、缓存、IDE/临时/数据库及常见凭据文件被忽略；历史文档由 Git 保留，不新建重复副本。
+初始 Git 基线：`b06d86a`；Phase 02 收口：`6acea32`。`.env`、`.venv`、缓存、IDE/临时/数据库、常见凭据文件及本地 Eval 报告被忽略；正式 Eval 报告保留追踪。历史版本由 Git 保存。
 
 ## Data / Storage Design
 
@@ -99,7 +99,7 @@
 
 ## Completed
 
-- Phase 02.1 infrastructure/database baseline：工程、Settings、FastAPI、12 表 ORM、Alembic、Docker 和健康检查完成，并获用户审核通过。
+- Phase 02.1 infrastructure/database baseline：工程、Settings、FastAPI、12 表 ORM、Alembic、Docker 和健康检查完成，并获审核通过。
 - Phase 02.2 seed data：64 条确定性模拟记录；本轮再次连续运行两次均新增 0/已有 64，无重复数据。
 - Query services：六个查询 Service、结构化返回、权限/归属及物流时间测试完成；Phase 03 复用，未修改 Service。
 - Migration round-trip verification：专用空库的 upgrade/downgrade/upgrade/current/check 在本次完整回归中重新通过。
@@ -107,32 +107,32 @@
 - Git baseline：初始基线 b06d86a 已建立；Phase 02.2 源码、测试与收口文档经范围/凭据检查纳入最终提交，未新增功能。
 - Phase 03 Business Tools：search_products、get_product、list_product_skus、get_inventory、get_order、get_logistics；类型化输入/输出、不可变 Registry、Schema 导出和安全错误转换。
 - Phase 03 验证：新增 102 项单元用例、41 项 PostgreSQL 集成用例；总计 210 项通过，含跨用户拒绝、可信权限矩阵、身份伪造拒绝、真实表锁超时转换及 SELECT-only 检查。当前容器运行环境的六工具冒烟验证通过。
-- Phase 03 阶段关闭：用户审核通过，按授权核对改动范围并保存 Git 提交；未增加功能或进入 Phase 04。
+- Phase 03 阶段关闭：审核通过，按授权核对改动范围并保存 Git 提交；未增加功能或进入 Phase 04。
 
 - Phase 04 Agent Core：可替换 OpenAI-compatible Adapter、真实 LangGraph、最小 State、可信 Runtime Context、顺序多 Tool 调用、有限循环、受控 answer/clarify/reject。
 - Phase 04 验证：新增 85 项用例，完整 295 项通过；本地与独立新镜像内 Agent 六工具冒烟通过，无 live LLM 调用。
-- Phase 04 阶段关闭：用户审核通过；核对改动、凭据与范围后按授权提交，未增加功能。
+- Phase 04 阶段关闭：审核通过；核对改动、凭据与范围后按授权提交，未增加功能。
 
 
 - Phase 05 RAG：10 份显式模拟文档、完整规则段落分块、SHA-256 重复识别、草稿原子更新、已发布版本保护、OpenAI-compatible/Fake Embedding、真实 pgvector 精确检索、关键词与 RRF、必要范围/有效期过滤和引用。
 - Phase 05 Tool/Agent：原 Registry 第七个只读工具；注入可信 Provider，原图/State/Evidence 保持，订单 → 商品 → SKU 核对 → 政策组合通过；文档注入不能修改身份或工具边界。
 - Phase 05 验证：完整 **353 passed in 51.50s**（原 295 + 52 RAG 专项 + 第七工具 6 项身份字段验证）；完整 RAG smoke 通过。13 条 Fake Eval：Hit@3=1.0、MRR=1.0、无结果准确率=1.0、范围正确率=1.0。
-- Phase 05 阶段关闭：用户审核通过，核对范围与敏感信息后按授权提交；353 passed 后实现代码未变，不重复完整测试，未增加功能。
+- Phase 05 阶段关闭：审核通过，核对范围与敏感信息后按授权提交；353 passed 后实现代码未变，不重复完整测试，未增加功能。
 
 - Phase 06：两项固定 Draft 工具、持久化 LangGraph interrupt/resume、请求/操作唯一身份、owner/active/permissions 校验、状态重检、订单锁内金额数量约束、原子业务/Audit/回执、真实调用 API 完成。
 - Phase 06 验证：新增 79 项（63 PostgreSQL HITL + 16 输入/注册/配置）；完整 432 passed，HITL/restart/concurrency smoke 均通过；独立 Python 进程恢复成功。
 - Phase 06 复审修复：P1 新增 12 项回归，覆盖订单/物流撤权、any 降 self、GET/request_key、恢复权限、本人查询、公开商品和真实归属变更；拒绝 HTTP 正文精确为安全错误且不含历史证据。P2 新增 10 项，覆盖七种状态、多行/混合数量金额、整单额度和同订单不同 item 的真实 PostgreSQL 竞争。
-- Phase 06 正式收口：独立复审通过；Durable HITL、PostgresSaver checkpoint、thread ownership、replay authorization、cancel order、refund request、operation draft、resume revalidation、idempotency、transaction/row locking、audit 与 API 已实现。跨 item concurrent refund cap 和状态累计/整单额度验证通过；最终完整回归及三组 smoke 已重新执行，按用户授权提交关闭。
+- Phase 06 正式收口：独立复审通过；Durable HITL、PostgresSaver checkpoint、thread ownership、replay authorization、cancel order、refund request、operation draft、resume revalidation、idempotency、transaction/row locking、audit 与 API 已实现。跨 item concurrent refund cap 和状态累计/整单额度验证通过；最终完整回归及三组 smoke 已重新执行，按阶段范围提交关闭。
 
 - Phase 07：46条独立Agent场景、33条RAG查询与离线/Live独立Runner；Fake Task/Tools/Clarify/Reject/HITL全100%，40个FinalResponse出处检查100%，安全10/10，未经授权动作与不支持声明代理率0。工具上限1/46为预期对抗场景。
 - Phase 07三路检索：Vector Hit@3/MRR=0.3636/0.3636；Keyword=0.6364/0.6136；Hybrid=0.6364/0.6364。Hybrid与Keyword无结果准确率90%，Vector100%；范围均100%。主要失败为8条语义召回、1条答案不充分。
 - Phase 07日志：request/model/tool/rag/interrupt/resume/completed/failed关联与耗时、调用次数、安全错误类别；Provider token数字透传由Mock验证。全量467项及离线Eval/Smoke已实际通过；Live缺配置阻塞。
 
-- Phase 07正式收口：用户已审核通过离线Agent/RAG Eval与Observability，授权提交阶段成果；保留全部未验证项与Known Issues，等待公开发布和Phase08。
+- Phase 07正式收口：已审核通过离线Agent/RAG Eval与Observability，授权提交阶段成果；保留全部未验证项与Known Issues，等待公开发布和Phase08。
 
 ## In Progress
 
-无进行中的开发任务。Phase 07 离线交付已审核通过并按授权收口；等待公开发布与 Phase 08 的后续明确指令。Live LLM/Embedding 因缺配置阻塞，仍未验证。
+无进行中的功能开发。首次 Public Release 本地准备已审核通过，许可确定为 MIT；等待实际 GitHub 发布的明确授权。Phase 08 未开始，Live LLM/Embedding 仍未验证。
 
 ## Not Started
 
@@ -148,7 +148,7 @@
 4. 商品搜索为转义通配符的名称字面子串匹配，SKU 按 JSONB 规格过滤；有输入长度/条数限制，无语义检索或新增文本索引。
 5. `orders:read:self` 必须附加 actor 归属条件，`orders:read:any` 才能跨用户读取；operator 标签不自动授权。无权限/他人订单/不存在统一 `OrderNotAccessible`，不泄露存在性。
 6. 物流明细另外限制同订单关系，防止异常关联泄露；这不替代未来写入一致性约束。当前身份依赖默认 401，仅接受未来认证层或测试显式注入。
-7. 后续版本交给 Git，不新建 README_v2 等文档副本；按用户授权冻结 Phase 02 源码和验证基线。
+7. 后续版本交给 Git，不新建 README_v2 等文档副本；按阶段范围冻结 Phase 02 源码和验证基线。
 8. Phase 03 只增加受控 Tool 适配，不修改 Service、ORM、首迁移、依赖或认证入口。白名单为显式不可变映射，无插件、自动发现、动态导入或任意函数名执行。
 9. 输入拒绝所有额外字段；字符串长度、UUID、specs 最多 8 项和 limit 1–100 由 Pydantic 校验。category 在调用 Service 时映射为 category_code；不接受模型身份、权限、角色或 SQL。
 10. `ToolResult[T]` 使用 status/data/source/queried_at/request_id/error；成功必须有类型化 data，无 error；失败无 data，仅固定安全错误。商品/SKU 空结果为 not_found，库存 0 与未知库存明确区分；已授权订单无包裹为成功空列表，物流保留 synced_at。
@@ -167,7 +167,7 @@
 20. 同 document_key/version 使用 SHA-256 加元数据判断重复；事务锁保护业务键、SAVEPOINT 保证更新失败回滚，调用方整批提交。仅草稿可修改内容/元数据，published/archived 变更须新版本；相同原文可显式重建派生 chunk。
 21. 两路共同过滤 published、有效期 [valid_from, valid_to)、global/category/product，取同 key 在本次范围和日期有效的最高版本。商品当前品类从真实 Product 读取，冲突参数拒绝；scope 不代表优先级，不裁决不同文档规则冲突。
 22. 向量通道精确余弦（默认最低 0.2），关键词为中文二元组/英文词/整问字面子串；每路 4K 候选，RRF sum(1/(60+rank))，最终 K 默认 5、最多 100。无 Reranker；先用真实模型/业务样本评估后再决定。
-23. 根据本轮要求，政策工具不接受 order_id；relevant_date 是显式查询条件而非可信政策事件日期。这替代架构旧文中直接由 order_id 派生日期的本阶段设想，历史政策适用未完整解决。
+23. 政策工具不接受 order_id；relevant_date 是显式查询条件而非可信政策事件日期。这替代架构旧文中直接由 order_id 派生日期的本阶段设想，历史政策适用未完整解决。
 24. 知识数据仅进入 tool 消息，固定系统消息、权限与白名单不受文本影响。Embedding 缺配置/失败返回 temporarily_unavailable，不自动退化成成功；无适用候选返回 not_found。
 25. 当前不加入 Reranker：“现有 Fake Eval 没有显示排序瓶颈，因此暂无证据支持增加 Reranker；真实 Embedding + 真实业务 Query Eval 后再决定。”
 
@@ -201,13 +201,25 @@
 - checkpoint enum deserialization warning：Phase07运行中出现对OrderStatus/PaymentStatus枚举的反序列化白名单警告；本轮场景通过但未修复恢复完整性隐患，待后续单独审查，不直接放宽白名单。
 - Grounding保证当前结构化资料可追溯，不证明知识内容可信、足以回答问题或适用历史订单；这些需要人工/真实模型评审。当前日志覆盖Agent执行入口，历史GET无独立执行span；没有生产日志保留/聚合方案。
 - RAG 历史事件日期、商品品类快照、政策冲突和下架映射仍未完整解决；引用不等于退款批准。向量空间/长文/引用生命周期限制延续 Phase 05，详见架构与 README。
-- 本阶段未构建/部署新 API 镜像。Windows Docker 首次启动曾因 WSL 0x800705aa 失败，临时 2GB WSL 配置恢复成功后已移除；现有 Docker 数据未重置。
+- 当前依赖组合尚未重新构建/部署 Linux API 镜像。
 
 ## Validation Status
 
-本轮最终验证：**2026-09-15（Asia/Shanghai）**，Python 使用工作区 `.venv/Scripts/python.exe`。详细指标与计算方法见 [Eval Summary](docs/eval/eval_summary.md)，历史 Phase 06 的454项仍包含在完整回归中。
+### Public Release 本地准备（2026-09-15）
 
-| 执行 | 本轮真实结果 |
+- 起始 HEAD 为 `75da7718e2ac35e55f072d36bd90c28c19f7b75a`，`master` 工作区干净；仓库非 shallow。检查全部本地对象（含所有引用、reflog 与悬空对象）：7 commit、118 tree、167 blob，无二进制 blob；`git fsck --full --no-reflogs` 无损坏，仅报告悬空对象。历史没有删除文件记录，所有历史版本仍逐对象扫描。
+- 凭据格式、赋值、连接 URL、私钥、手机号/证件、邮箱、本地路径及高熵字符串检查，并复核命中内容与 Seed/Fixture 来源：未发现真实凭据、客户数据或个人绝对路径。本地实际数据库密码与全部历史 blob 比对无命中；示例密码和 Mock 字符串保留。提交身份为昵称与 example.com 示例邮箱，公开提交仍会展示该昵称。
+- 公开追踪内容与已忽略本机配置分开；扫描不是凭据有效性验证，也不代表未来新增文件自动安全。未重写历史或清理 Git 对象。
+- 静态检查：20 个 Markdown 本地链接/标题目标与代码围栏、全部追踪 JSON 解析、Eval 指标与语料校验、25 项忽略/保留断言、README 4 个 PowerShell 代码块语法、Eval CLI help、Compose 配置、差异范围及 `git diff --check` 均通过。没有新增运行依赖。
+- 公开准备最终范围为 4 个 Markdown 文件、`.gitignore` 及 MIT LICENSE，未改业务代码、数据集或报告；未重跑 467 tests、Live API、首次安装/启动流程或 Linux 镜像构建，也未做 GitHub 页面实际渲染验证。
+- Public Release Check 已审核通过，MIT 许可已确认并添加；本地收口提交消息为 `docs: prepare public preview release`。未配置 remote、push、创建 tag/Release 或开始 Phase 08。
+- MIT 收口检查：标准许可正文与本地已安装包的 MIT 原文一致，README 入口有效，6 文件范围核对通过；`git diff --check` 与 `docker compose config --quiet` 实际执行均退出 0。纯文档与许可改动未重跑完整测试。
+
+### Phase 07 验证记录
+
+以下为 **Phase 07 阶段关闭验证：2026-09-15（Asia/Shanghai）**，不是公开文档准备重新运行的结果。Python 使用工作区 `.venv/Scripts/python.exe`。详细指标与计算方法见 [Eval Summary](docs/eval/eval_summary.md)，历史 Phase 06 的454项仍包含在完整回归中。
+
+| 执行 | Phase 07 保存的真实结果 |
 |---|---|
 | `python -m pytest -q` | **467 passed in 78.36s**，0 failed / 0 skipped；包含真实 PostgreSQL、HITL安全及迁移往返 |
 | `python -m pip check` | No broken requirements found，退出0 |
@@ -227,34 +239,18 @@
 
 ## Next Recommended Step
 
-**Phase 07 离线阶段已关闭，等待公开发布和 Phase 08 的明确授权。** 本轮不公开发布、不部署、不进入 Phase 08。
+**等待 GitHub 实际发布的明确授权。** Public Release Check 已通过，许可为 MIT。推荐以 `v0.7-preview` 表示 Phase 07 的 Stable Preview；这是候选 Git 标签，尚未创建。`pyproject.toml` 包版本仍为 `0.2.0`，本次未改，不能声称已发布 0.7 包。
 
-后续先读本状态与 docs/eval/eval_summary.md，再按用户指定范围处理。保留 Vector Hit@3=36.36%、Keyword/Hybrid Hit@3=63.64%、Hybrid MRR=0.6364；Fake Agent 46/46 不代表真实模型能力。当前优先待验证项为 Live 兼容性与真实检索质量，待解决问题为口语/同义召回、unknown-price答案充分性和checkpoint枚举警告；没有证据支持增加Reranker。其余Final Hardening事项保留在Known Issues，未经明确授权不实施。
+随后另行明确授权 GitHub 实际发布；Phase 08 仍未开始。优先待验证项仍为 Live 兼容性与真实检索质量，待解决问题仍为口语/同义召回、unknown-price 答案充分性和 checkpoint 枚举警告；其余 Final Hardening 保留在 Known Issues，不随公开准备实施。
 
 ## Change Log
 
-- 2026-09-15：用户审核通过Phase07离线交付，授权以 `feat: complete phase 07 offline eval and observability` 提交收口。核对26个阶段文件，无敏感信息、临时文件或提前进入Phase08的实现；467 passed后仅清理共享夹具文件末尾空行，AST不变，补跑受影响HITL测试85 passed in 33.48s；其余仅更新收口文档，未重复完整测试。状态改为 `Phase 07 offline completed / awaiting public release and Phase 08`；Live两项保持blocked/未验证，未发布或部署。
-
-- 2026-09-15：Phase07离线体系实现并运行：Agent46（v1.1）/RAG33（v2.0）、三路消融、结构化日志、5场景smoke及467项全量测试通过；Live两项缺配置阻塞，Fake与真实质量严格分开。记录语义召回/答案充分性与checkpoint枚举警告，不增加Reranker；未提交，待审核，未进入Phase08。
-
-- 2026-09-15：用户确认 Phase 06 独立复审通过（P1/P2 closed，新 P0/P1 为 0，P3 deferred）并授权关闭。本次重新执行完整回归 454 passed in 93.88s，HITL 4 / restart 3 / concurrency 5 passed，Alembic 0002 (head) 且无漂移，静态检查通过；以 feat: complete phase 06 durable hitl and safe writes 提交，状态为 completed / awaiting Phase 07，未开始下一阶段。
-
-- 2026-09-15：修复历史订单/物流回放重新授权，新增 P1 12 项和 P2 10 项真实 PostgreSQL 回归；454 项全量、HITL 4 / restart 3 / concurrency 5 项 smoke 通过，移除父订单锁的反向验证按预期超额失败。P3 deferred；状态为 Phase 06 fixes implemented / awaiting independent re-review，保留未提交改动并停止。
-
-- 2026-09-12：V0.2 架构落盘；Phase 02.1 实现、40 项测试通过，随后获用户审核。
-- 2026-09-12：建立基线 b06d86a；Phase 02.2 迁移往返、64 条 Seed、六个 Service、67 项测试完成，改动未提交待审核。
-- 2026-09-13：按最新项目状态规范整理为 15 节，区分已有验证与恢复时的运行环境变化；未修改业务代码或进入下一阶段。
-
-- 2026-09-13：按用户授权执行最终完整回归，67 项通过；Seed 两次无新增、健康与三库状态正常；冻结并提交 Phase 02，状态为 completed / awaiting Phase 03，未进入下一阶段。
-- 2026-09-13：按授权完成 Phase 03 六个只读 Tools、结构化结果和固定白名单；新增 143 项测试，完整 210 项通过，现有容器环境冒烟检查通过；未改 Phase 02 Service/模型/迁移，未提交或进入 LangGraph。
-- 2026-09-13：用户审核通过 Phase 03；仅做阶段关闭，测试后未修改代码、不重复完整 pytest；以 `feat: complete phase 03 business tools` 提交本阶段改动，状态更新为 completed / awaiting Phase 04，未开始 LangGraph/LLM/RAG。
-
-- 2026-09-14：完成 Phase 04 Read-only LangGraph Agent Core；新增 85 项测试，完整 295 项通过，本地和独立容器六工具冒烟通过；未配置真实 LLM，未执行 live smoke；更新架构/README，工作区待用户审核，停止在本阶段。
-
-- 2026-09-14：用户审核通过 Phase 04；仅更新阶段关闭状态并按授权以 `feat: complete phase 04 langgraph agent core` 提交。295 passed 后实现代码未变，不重复完整 pytest；状态为 completed / awaiting Phase 05，后续阶段未开始。
-
-- 2026-09-14：Phase 05 RAG 本地链路完成；未改原 ORM/迁移/Business Services，新增第七只读 Tool，353 项完整测试与真实 PostgreSQL Fake smoke 通过，13 条 Eval 指标见报告。未配置 live API，工作区待审核，未提交/部署/进入下一阶段。
-
-- 2026-09-14：用户审核通过 Phase 05；仅做阶段关闭，保留 Known Issues 和 Reranker 决策，按授权以 `feat: complete phase 05 rag knowledge retrieval` 提交。353 passed 后实现代码未改，不重复完整测试；状态为 completed / awaiting Phase 06，未开始后续功能。
-
-- 2026-09-14：Phase 06 设计审计后新增 0002/agent_workflows 与官方 PostgreSQL checkpoint；实现两类 Draft/HITL/Resume/幂等事务/Audit/API。432 项全量和 11 项分组 smoke 通过，三库 0002，开发原 64 条内容保持，临时 WSL 配置已移除；等待用户审核，未提交/部署/进入下一阶段。
+- 2026-09-15：公开准备审核通过，添加标准 MIT LICENSE（Copyright 2026 K1MOJ1）及 README 许可入口，以 `docs: prepare public preview release` 本地提交收口；仅文档/忽略规则/许可，无核心代码变更。未配置 remote、push、创建 tag/Release 或开始 Phase 08。
+- 2026-09-15：首次公开准备，整理 README、架构和 Eval 说明，补充缓存及本地报告忽略规则；完整本地 Git 对象检查未发现真实凭据或客户资料。改动未提交，LICENSE 未添加，未配置远程或发布；Phase 08 未开始。
+- 2026-09-15：Phase 07 在 `75da771` 关闭；Agent 46 / RAG 33、三路消融、结构化日志和 smoke 完成。完整 467 passed，之后仅夹具末尾空行调整，AST 不变，HITL 补跑 85 passed；Live 两项 blocked。
+- 2026-09-15：Phase 06 在 `d570374` 正式关闭；历史证据回放授权与跨明细退款额度复审通过，完整 454 passed，HITL / restart / concurrency smoke 为 4 / 3 / 5 passed；P3 JSONB CHECK 加固延期。
+- 2026-09-14：Phase 05 在 `39ca227` 关闭；第七个只读工具、RAG、353 项测试与 13 条 Fake Eval 完成，未执行 Live 验证。
+- 2026-09-14：Phase 04 在 `5721ef8` 关闭；只读 LangGraph Agent、295 项测试及本地/独立容器 smoke 完成，未调用真实 LLM。
+- 2026-09-13：Phase 03 在 `0090e3b` 关闭；六个只读工具、210 项测试及容器 smoke 完成。
+- 2026-09-13：Phase 02 在 `6acea32` 关闭；数据库、64 条模拟 Seed、查询服务、迁移往返及 67 项测试完成。
+- 2026-09-12：V0.2 设计与基础设施基线 `b06d86a` 建立；原 Phase 01 文档保留作历史设计快照。

@@ -5,6 +5,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 build/
 dist/
@@ -19,6 +21,9 @@ htmlcov/
 Thumbs.db
 *.tmp
 *.log
+# Local reruns must not replace the reviewed Eval evidence.
+docs/*_results.local.json
+docs/eval/*_results.local.json
 tmp/
 .local/
 *.db
