@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.checkpoint import checkpoint_session
 from app.agent.graph import AgentContext, build_graph, initial_state
 from app.db.models import AgentWorkflow
+from app.core.observability import observed, correlate, emit
 from app.core.security import RequestContext
 from app.schemas.operations import ResumeRequest, StartRequest, WorkflowResponse
 from app.services.operations import OperationError, TERMINAL, owned_workflow, verify_actor
@@ -39,6 +40,7 @@ async def response(row: AgentWorkflow, session: AsyncSession, context: RequestCo
     except OrderNotAccessible:
         # Reject the whole payload: its rendered text also embeds the protected evidence.
         raise OperationError("not_accessible", 403) from None
+    correlate(thread_id=row.id, operation_id=row.operation_id)
     return WorkflowResponse(thread_id=row.id, status=row.status, operation_id=row.operation_id,
                             draft=row.draft, result=row.result)
 
@@ -48,6 +50,7 @@ async def get_workflow(thread_id: UUID, *, context: AgentContext) -> WorkflowRes
         return await response(await owned_workflow(session, context.request, thread_id), session, context.request)
 
 
+@observed("request")
 async def start_workflow(request: StartRequest, *, context: AgentContext) -> WorkflowResponse:
     request = StartRequest.model_validate(request)
     digest = sha256(request.message.encode()).hexdigest()
@@ -66,12 +69,17 @@ async def start_workflow(request: StartRequest, *, context: AgentContext) -> Wor
     return await _drive(thread_id, context=context, message=request.message)
 
 
+@observed("request")
 async def resume_workflow(thread_id: UUID, request: ResumeRequest, *, context: AgentContext) -> WorkflowResponse:
     request = ResumeRequest.model_validate(request)
     return await _drive(thread_id, context=context, resume=request)
 
 
 async def _drive(thread_id: UUID, *, context: AgentContext, message=None, resume=None) -> WorkflowResponse:
+    correlate(thread_id=thread_id)
+    if resume:
+        correlate(operation_id=resume.operation_id)
+        emit("resume")
     # Authorize before even loading/checking checkpoints; a thread ID is never a capability.
     await get_workflow(thread_id, context=context)
     async with checkpoint_session(context.settings.database_url.get_secret_value(), thread_id) as saver:
@@ -119,6 +127,8 @@ async def _drive(thread_id: UUID, *, context: AgentContext, message=None, resume
                     if output.get("draft") != current.draft:
                         raise OperationError("operation_mismatch")
                     current.status = "waiting_for_confirmation"
+                    correlate(operation_id=current.operation_id)
+                    emit("interrupt", status=current.status)
                 else:
                     if current.operation_id is not None:
                         raise OperationError("operation_result_missing")

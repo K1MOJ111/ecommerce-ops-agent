@@ -8,11 +8,12 @@
 
 ## Current Phase
 
-**Phase 06 completed / awaiting Phase 07**。
+**Phase 07 offline completed / awaiting public release and Phase 08**。
 
-- 起点为已关闭 Phase 05 `39ca227`，进入时工作区干净；没有依赖旧任务设计或修改原 0001。
-- 用户确认独立复审通过：原 P1、两个 P2 均 closed，新 P0/P1 均为 0；P3 延期至 Final Hardening，已授权 Phase 06 提交与关闭。
-- 本次最终完整回归重新执行：454 passed in 93.88s，三组真实 PostgreSQL smoke 全部通过；Alembic 为 0002 (head)，无结构漂移。Phase 06 按授权收口，未部署、未开始 Phase 07。
+- 起点是正式关闭的 Phase 06 `d570374`，进入时工作区干净；依当前仓库核对，没有依据旧任务重做设计。
+- 独立 Agent 46条（agent-v1.1）、RAG 33条（rag-v2.0）、三路检索消融、结构化日志与报告已实现和实际运行；完整467项测试通过。
+- 用户已审核通过 Offline Agent Eval、Offline RAG Eval 与 Observability，并授权本阶段提交关闭。Live LLM / Embedding 均 blocked by missing configuration，兼容性与真实质量未验证。
+- 未新增业务 Tool、写能力、依赖、数据库 Schema、Reranker 或监控平台；本轮只更新收口文档并提交，未公开发布、部署或进入 Phase 08。
 
 ## Confirmed Architecture
 
@@ -48,6 +49,8 @@
 | `app/rag/` | 文档/引用 Schema、分块入库、Embedding Adapter、Metadata Filter、向量/关键词召回与 RRF |
 | `data/knowledge/` | 10 份模拟文档与 13 条 Eval 查询 |
 | `scripts/ingest_knowledge.py`、`rag_eval.py`、`rag_smoke.py` | 显式入库、评估、事务回滚的完整 RAG 冒烟 |
+| `docs/eval/`、`scripts/agent_eval.py` | Phase07独立数据集、评分器、消融、报告与Live配置检查 |
+| `app/core/observability.py`、`scripts/eval_support.py` | 结构化运行日志与测试/Eval共享HITL隔离夹具 |
 | `docs/rag_eval_results.json` | Phase 05 已验证的 Fake Eval 报告，Phase 06 未重写 |
 | `scripts/agent_smoke.py` | Fake Model + 真实图/工具/数据库，只读开发 Seed 冒烟 |
 | `scripts/seed_data.py` | 显式开发/测试 Seed 命令 |
@@ -121,9 +124,15 @@
 - Phase 06 复审修复：P1 新增 12 项回归，覆盖订单/物流撤权、any 降 self、GET/request_key、恢复权限、本人查询、公开商品和真实归属变更；拒绝 HTTP 正文精确为安全错误且不含历史证据。P2 新增 10 项，覆盖七种状态、多行/混合数量金额、整单额度和同订单不同 item 的真实 PostgreSQL 竞争。
 - Phase 06 正式收口：独立复审通过；Durable HITL、PostgresSaver checkpoint、thread ownership、replay authorization、cancel order、refund request、operation draft、resume revalidation、idempotency、transaction/row locking、audit 与 API 已实现。跨 item concurrent refund cap 和状态累计/整单额度验证通过；最终完整回归及三组 smoke 已重新执行，按用户授权提交关闭。
 
+- Phase 07：46条独立Agent场景、33条RAG查询与离线/Live独立Runner；Fake Task/Tools/Clarify/Reject/HITL全100%，40个FinalResponse出处检查100%，安全10/10，未经授权动作与不支持声明代理率0。工具上限1/46为预期对抗场景。
+- Phase 07三路检索：Vector Hit@3/MRR=0.3636/0.3636；Keyword=0.6364/0.6136；Hybrid=0.6364/0.6364。Hybrid与Keyword无结果准确率90%，Vector100%；范围均100%。主要失败为8条语义召回、1条答案不充分。
+- Phase 07日志：request/model/tool/rag/interrupt/resume/completed/failed关联与耗时、调用次数、安全错误类别；Provider token数字透传由Mock验证。全量467项及离线Eval/Smoke已实际通过；Live缺配置阻塞。
+
+- Phase 07正式收口：用户已审核通过离线Agent/RAG Eval与Observability，授权提交阶段成果；保留全部未验证项与Known Issues，等待公开发布和Phase08。
+
 ## In Progress
 
-无进行中的开发任务。Phase 06 已完成，等待用户指定 Phase 07 范围；本轮不开始下一阶段。
+无进行中的开发任务。Phase 07 离线交付已审核通过并按授权收口；等待公开发布与 Phase 08 的后续明确指令。Live LLM/Embedding 因缺配置阻塞，仍未验证。
 
 ## Not Started
 
@@ -172,47 +181,61 @@
 33. 退款 requested/approved/processing/succeeded 占用数量和金额，rejected/failed/cancelled 不占用。整单独立上限测试显式构造数据库允许的历史不一致：整单折扣未分摊到 item，使整单剩余额小于明细剩余额；这是防御性约束验证，不改变当前退款业务规则。
 34. P3 draft JSONB 与列字段完整绑定 CHECK 留给 Final Hardening；本轮保留应用层保护，不新增 Schema 修改。
 
+35. Eval Dataset与测试分开；Fake预设脚本只能验证执行轨迹，不能推导语言理解能力。评分oracle不进入Live Prompt；最终证据不强制包含中间查询。数据版本及修改理由记录在dataset。
+36. 复用原RAG函数增加内部vector/keyword/hybrid选择，业务工具仍默认Hybrid且不暴露mode；不改变现有检索阈值或模型行为来迎合Eval。
+37. 当前不增加Reranker：Fake仅1个查询排序改善，主要瓶颈是漏召回和无答案误召回；待真实Embedding证据。
+38. 使用标准库logging/ContextVar、白名单字段与perf_counter，不永久记录完整ToolResult。开发日志、业务Audit和Eval报告分开；修复迁移fileConfig关闭已有logger的Eval阻断，未修改数据库Schema。
+39. HITL评估复用从Phase06提取的隔离夹具；只读Eval事务回滚，持久化场景按本轮UUID清理。Live LLM固定10条子集，不自动扩大，Live Embedding与Fake分开入库回滚。
+
 ## Known Issues
 
-- 正式认证、数据库最小权限角色、Audit 防篡改尚未实现；DEV_ACTOR_ID 只供本机模拟，不等于登录系统。生产级部署、备份/恢复和负载验证尚未完成。
-- P3 deferred：agent_workflows.draft JSONB 内 operation_type、actor、operation_id 与列字段缺少完整数据库绑定 CHECK；保留现有应用层校验和已有数据库约束，留给 Final Hardening，不作为本轮关闭条件，未为此修改 Schema。
+- 正式认证、DB 最小权限角色、Audit 防篡改尚未实现；DEV_ACTOR_ID 只供本机模拟，不等于登录系统。production deployment、backup / restore、load validation 尚未完成。
+- JSONB CHECK hardening（P3 deferred）：agent_workflows.draft JSONB 内 operation_type、actor、operation_id 与列字段缺少完整数据库绑定 CHECK；保留现有应用层校验和已有数据库约束，留给 Final Hardening，不作为本轮关闭条件，未为此修改 Schema。
 - 已付款取消不支持；取消不释放库存。退款仅申请，非审批/打款；不退运费，按数量分摊向下取分，可能保守留下一分以内余数。每请求一个操作，待确认参数不能编辑。
 - 未来支付/物流/审批等写入必须遵守父订单锁与重新校验协议；直接 SQL/数据库管理员绕过不在保证内。回执/checkpoint 未设计保留清理策略，不能随意删除幂等记录。
-- 模型/用户消息和必要查询数据会存入 checkpoint；尚无业务隐私保留/归档策略；可信 Context、API Key、Session 不序列化。仅允许的 State 类型可反序列化，pickle 关闭。
-- live LLM 与 live Embedding Key 均未配置，本轮未调用；Mock/Fake 通过不证明供应商兼容、语义召回、工具选择或语言体验。RAG 13 条 Fake Eval 仍非真实质量指标，无 Reranker。
+- data retention：模型/用户消息和必要查询数据会存入 checkpoint；尚无业务隐私保留/归档策略；可信 Context、API Key、Session 不序列化。仅允许的 State 类型可反序列化，pickle 关闭。
+- live LLM compatibility 未验证：缺配置，报告为 blocked；Fake Agent 46/46 仅代表确定性离线工作流测试，不代表真实模型能力。
+- live Embedding / real retrieval quality 未验证：缺配置，报告为 blocked。
+- RAG conversational/synonym recall 不足：口语/同义表达漏召回，当前 Hybrid 正例漏8/22。
+- unknown-price / answer sufficiency 问题：相关政策片段不含所问金额答案，无结果判断仍有不足。当前瓶颈主要在 Recall 和 answer sufficiency，没有证据支持增加 Reranker。
+- checkpoint enum deserialization warning：Phase07运行中出现对OrderStatus/PaymentStatus枚举的反序列化白名单警告；本轮场景通过但未修复恢复完整性隐患，待后续单独审查，不直接放宽白名单。
+- Grounding保证当前结构化资料可追溯，不证明知识内容可信、足以回答问题或适用历史订单；这些需要人工/真实模型评审。当前日志覆盖Agent执行入口，历史GET无独立执行span；没有生产日志保留/聚合方案。
 - RAG 历史事件日期、商品品类快照、政策冲突和下架映射仍未完整解决；引用不等于退款批准。向量空间/长文/引用生命周期限制延续 Phase 05，详见架构与 README。
 - 本阶段未构建/部署新 API 镜像。Windows Docker 首次启动曾因 WSL 0x800705aa 失败，临时 2GB WSL 配置恢复成功后已移除；现有 Docker 数据未重置。
 
 ## Validation Status
 
-最终收口验证：**2026-09-15（Asia/Shanghai）**。Python 均使用工作区 `.venv/Scripts/python.exe`。本次重新执行完整 pytest、全部 smoke、静态检查及 Alembic current/check；下表标记的历史专项/开发数据检查不冒充本次执行。
+本轮最终验证：**2026-09-15（Asia/Shanghai）**，Python 使用工作区 `.venv/Scripts/python.exe`。详细指标与计算方法见 [Eval Summary](docs/eval/eval_summary.md)，历史 Phase 06 的454项仍包含在完整回归中。
 
-| 执行 | 真实结果 |
+| 执行 | 本轮真实结果 |
 |---|---|
-| `python -m pytest -q` | **本次 454 passed in 93.88s**，0 failed/0 skipped；包含真实 PostgreSQL、全部 P1/P2 回归和专用空库迁移往返 |
-| P1 replay authorization 专项（修复轮历史） | **12 passed in 5.84s**；修复前撤权 GET 用例实测失败（200 而非 403），修复后全组通过；本次纳入完整回归 |
-| P2 退款专项（修复轮历史） | **10 passed in 8.29s**；七种状态、多状态累计、整单额度、跨 item 并发；本次纳入完整回归 |
-| 父订单锁反向验证（修复轮历史） | 独立进程临时移除 Order 的 FOR UPDATE，跨 item 测试按预期失败：总退款 40 > 整单上限 30；无生产源码修改 |
-| HITL PostgreSQL 专项 | 本次全量包含 85 项（原 63 + 修复新增 22） |
-| `python -m scripts.hitl_smoke hitl` | **本次 4 passed in 6.16s**；取消/退款确认与拒绝、重复确认 |
-| `python -m scripts.hitl_smoke restart` | **本次 3 passed in 7.60s**；新 Engine、销毁并重建 App、独立 Python 进程 Resume |
-| `python -m scripts.hitl_smoke concurrency` | **本次 5 passed in 4.66s**；原幂等/并发场景及同订单不同 item 的父订单锁竞争 |
-| `python -m pip check` | No broken requirements found，退出码 0 |
-| `python -m compileall app scripts tests` | 退出码 0 |
-| `docker compose config --quiet` / `git diff --check` | 通过；仅 Windows LF/CRLF 提示 |
-| 本次开发库 `alembic current` / `alembic check` | **0002 (head)**；**No new upgrade operations detected**；均退出码 0，无新增 migration |
-| 开发库迁移与 setup（09-14 历史） | 升至 0002，checkpoint setup 成功 |
-| 开发数据保护（09-14 历史） | 迁移前后逐表计数及完整行内容哈希相同：原 12 表 64 条记录无改变 |
-| 逐库检查（修复轮历史） | 开发 64 条原记录、0 workflow；两个测试库应用记录均为 0；开发/普通测试库 checkpoint 数据为空，自有迁移 10 行保留 |
-| 本次范围与敏感信息核对 | 30 个 Phase 06 变更文件未发现本地凭据泄露或临时文件；原 commerce/audit 模型、RequestContext、0001、catalog/inventory、RAG 实现/数据未改，无下一阶段代码。本轮只更新状态文档并提交已审核改动 |
+| `python -m pytest -q` | **467 passed in 78.36s**，0 failed / 0 skipped；包含真实 PostgreSQL、HITL安全及迁移往返 |
+| `python -m pip check` | No broken requirements found，退出0 |
+| `python -m compileall app scripts tests` | 退出0 |
+| `docker compose config --quiet` / `git diff --check` | 退出0；仅LF/CRLF提示 |
+| `python -m scripts.agent_eval agent --replace` | agent-v1.1，46/46通过；脚本化控制实验，不是模型理解准确率 |
+| `python -m scripts.agent_eval rag --replace` | rag-v2.0，33查询×3路；Fake 256维，Hybrid Hit@3=14/22、MRR=0.6364，范围100%，无结果9/10，参数拒绝1/1 |
+| `python -m scripts.agent_eval smoke` | 5场景通过，9种必需事件与关联检查通过 |
+| `python -m scripts.agent_eval agent --live` | blocked by missing configuration，0例；未调用付费API |
+| `python -m scripts.agent_eval rag --live` | blocked by missing configuration，0例；未验证真实语义召回 |
+| 本地性能 | 48次完成请求p50=42.439ms / p95=129.253ms；50次发起/恢复调用共50次Tool、82次LLM complete；token=null，非生产P95 |
+| 运行后数据库检查 | 开发库64条、0workflow/0checkpoint；两个测试库应用表全0、普通测试库checkpoint数据全0；三库Alembic=0002 |
 
-测试在真实 PostgreSQL 中实际提交独立随机 UUID 业务数据并精确清理；没有 SQLite 代替锁与并发证据。Audit 回滚场景曾发现失败节点 snapshot.next 为空，修复原确认重试检查后完整回归通过。live LLM/Embedding、Linux 新镜像、部署、生产认证和负载未验证。
+收口核对：最终467 passed后实现逻辑未变；本轮为通过暂存差异检查，仅移除 scripts/eval_support.py 的一个末尾空行，Python AST核对相同。补跑受影响的 `python -m pytest -q tests/integration/test_hitl.py`：**85 passed in 33.48s**；未重复完整测试。其余仅更新收口文档，并检查Git差异、范围、报告一致性与敏感信息。
+
+过程中日志配置禁用logger、Docker停止和新测试夹具不完整曾导致失败；已修复/恢复后重新完整运行，上表仅为最终结果。未构建/部署镜像，未执行生产认证、真实API、负载或备份恢复验证。
 
 ## Next Recommended Step
 
-**Phase 06 已正式关闭，等待 Phase 07 明确任务**。下一阶段宜使用专用任务并先读取本状态、README 和架构；本轮停止，不开始 Phase 07、Final Hardening 或 Observability。
+**Phase 07 离线阶段已关闭，等待公开发布和 Phase 08 的明确授权。** 本轮不公开发布、不部署、不进入 Phase 08。
+
+后续先读本状态与 docs/eval/eval_summary.md，再按用户指定范围处理。保留 Vector Hit@3=36.36%、Keyword/Hybrid Hit@3=63.64%、Hybrid MRR=0.6364；Fake Agent 46/46 不代表真实模型能力。当前优先待验证项为 Live 兼容性与真实检索质量，待解决问题为口语/同义召回、unknown-price答案充分性和checkpoint枚举警告；没有证据支持增加Reranker。其余Final Hardening事项保留在Known Issues，未经明确授权不实施。
 
 ## Change Log
+
+- 2026-09-15：用户审核通过Phase07离线交付，授权以 `feat: complete phase 07 offline eval and observability` 提交收口。核对26个阶段文件，无敏感信息、临时文件或提前进入Phase08的实现；467 passed后仅清理共享夹具文件末尾空行，AST不变，补跑受影响HITL测试85 passed in 33.48s；其余仅更新收口文档，未重复完整测试。状态改为 `Phase 07 offline completed / awaiting public release and Phase 08`；Live两项保持blocked/未验证，未发布或部署。
+
+- 2026-09-15：Phase07离线体系实现并运行：Agent46（v1.1）/RAG33（v2.0）、三路消融、结构化日志、5场景smoke及467项全量测试通过；Live两项缺配置阻塞，Fake与真实质量严格分开。记录语义召回/答案充分性与checkpoint枚举警告，不增加Reranker；未提交，待审核，未进入Phase08。
 
 - 2026-09-15：用户确认 Phase 06 独立复审通过（P1/P2 closed，新 P0/P1 为 0，P3 deferred）并授权关闭。本次重新执行完整回归 454 passed in 93.88s，HITL 4 / restart 3 / concurrency 5 passed，Alembic 0002 (head) 且无漂移，静态检查通过；以 feat: complete phase 06 durable hitl and safe writes 提交，状态为 completed / awaiting Phase 07，未开始下一阶段。
 

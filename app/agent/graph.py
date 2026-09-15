@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.llm import LLMError, Model, ModelReply, ToolCall
 from app.agent.state import AgentError, AgentState, Decision, Evidence, FinalResponse
+from app.core.observability import observed
 from app.core.config import Settings
 from app.core.security import RequestContext
 from app.rag.embedding import EmbeddingProvider
@@ -129,6 +130,7 @@ def _fallback_decision(state: AgentState) -> Decision:
     return Decision(action="answer", evidence_ids=[item.id for item in state["evidence"] if item.result.status == "success"])
 
 
+@observed("model")
 async def plan(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     context = runtime.context
     schemas = [{"type": "function", "function": {key: schema[key] for key in ("name", "description", "parameters")}}
@@ -246,6 +248,7 @@ def initial_state(message: str, *, writable: bool = False) -> AgentState:
             "decision": None, "final_response": None, "draft": None, "operation_result": None}
 
 
+@observed("request")
 async def run_agent(message: str, *, context: AgentContext) -> AgentState:
     if not isinstance(context.request, RequestContext):
         raise TypeError("server_request_context_required")

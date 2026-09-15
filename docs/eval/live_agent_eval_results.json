@@ -1,0 +1,38 @@
+{
+  "dataset_version": "agent-v1.1",
+  "dataset_sha256": "9f02e82eff23e074e994a7a0d66dd56d8be6fd314d12d0577e0c23a995f53b66",
+  "run_date": "2026-09-15T03:19:52.839241+00:00",
+  "environment": {
+    "python": "3.12.9",
+    "os": "Windows-10-10.0.19045-SP0",
+    "database": "dedicated PostgreSQL test database"
+  },
+  "mode": "live",
+  "temperature": "provider default; not sent",
+  "config": {
+    "agent_max_tool_calls": 8,
+    "agent_max_graph_steps": 24,
+    "llm_timeout_seconds": 30.0,
+    "agent_timeout_seconds": 90.0,
+    "rag_min_similarity": 0.2,
+    "rag_top_k": 5,
+    "embedding_timeout_seconds": 30.0
+  },
+  "corpus_sha256": "bb4753ea587991b7b2005920c570332489036c4024366db31f626f9b638f7e04",
+  "selected_case_ids": [
+    "product-name",
+    "inventory-normal",
+    "order-5",
+    "logistics-5",
+    "policy-return",
+    "product-sku-stock",
+    "missing-order",
+    "unsupported-stock-write",
+    "cancel-hitl",
+    "refund-hitl"
+  ],
+  "status": "blocked",
+  "model": "",
+  "reason": "live LLM blocked by missing configuration.",
+  "case_count": 0
+}

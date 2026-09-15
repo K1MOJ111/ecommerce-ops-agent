@@ -1,0 +1,433 @@
+{
+  "purpose": "Phase 05 retained unchanged; expanded before running models. Synthetic policies, not production quality.",
+  "k": 3,
+  "cases": [
+    {
+      "id": "return-current",
+      "query": "退货",
+      "expected": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "exchange-category",
+      "query": "尺码不合适换货",
+      "category": "clothing",
+      "expected": [
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ]
+    },
+    {
+      "id": "shirt-specific",
+      "query": "首次洗涤开线",
+      "product_id": "1ceabd9c-f32f-5e11-9852-e238b0db9c4e",
+      "expected": [
+        [
+          "demo-shirt",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category",
+        "product"
+      ]
+    },
+    {
+      "id": "shipping",
+      "query": "发货时效",
+      "expected": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "shipped-cancel",
+      "query": "已经发货能否拦截",
+      "expected": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "food",
+      "query": "食品开封",
+      "category": "food",
+      "expected": [
+        [
+          "demo-food",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ]
+    },
+    {
+      "id": "historic-return",
+      "query": "退货",
+      "relevant_date": "2026-05-01T00:00:00Z",
+      "expected": [
+        [
+          "demo-return",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "expired-excluded",
+      "query": "春季运费补贴",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "draft-excluded",
+      "query": "紫晶",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "archived-excluded",
+      "query": "琥珀",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "future-excluded",
+      "query": "翡翠",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "unknown",
+      "query": "星际跃迁",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "no-category-scope",
+      "query": "尺码",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "return-colloquial",
+      "query": "买了不想要了可以退不",
+      "expected": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "return-synonym",
+      "query": "收货后反悔想退回去",
+      "expected": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "return-incomplete",
+      "query": "退",
+      "expected": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "return-typo",
+      "query": "签手后七天想退获",
+      "expected": [
+        [
+          "demo-return",
+          2,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "exchange-colloquial",
+      "query": "衣服穿着太紧能换大一号吗",
+      "expected": [
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "clothing"
+    },
+    {
+      "id": "exchange-synonym",
+      "query": "换个尺寸",
+      "expected": [
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "clothing"
+    },
+    {
+      "id": "shirt-short-name",
+      "query": "T恤洗一次就裂口",
+      "expected": [
+        [
+          "demo-shirt",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category",
+        "product"
+      ],
+      "product_id": "1ceabd9c-f32f-5e11-9852-e238b0db9c4e"
+    },
+    {
+      "id": "shirt-quality",
+      "query": "短袖洗完开线咋办",
+      "expected": [
+        [
+          "demo-shirt",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category",
+        "product"
+      ],
+      "product_id": "1ceabd9c-f32f-5e11-9852-e238b0db9c4e"
+    },
+    {
+      "id": "shipping-colloquial",
+      "query": "付钱两天了啥时候给我寄",
+      "expected": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "shipping-synonym",
+      "query": "多久出库",
+      "expected": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "intercept-colloquial",
+      "query": "包裹已经寄出了还能截住吗",
+      "expected": [
+        [
+          "demo-shipping",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "food-colloquial",
+      "query": "零食拆袋了不想吃还能退吗",
+      "expected": [
+        [
+          "demo-food",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "food"
+    },
+    {
+      "id": "food-similar",
+      "query": "食品质量问题退货",
+      "expected": [
+        [
+          "demo-food",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "food"
+    },
+    {
+      "id": "exchange-similar",
+      "query": "签收七天尺码不合适换货",
+      "expected": [
+        [
+          "demo-exchange",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "clothing"
+    },
+    {
+      "id": "unknown-price",
+      "query": "退货运费多少钱",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "unknown-warranty",
+      "query": "手机保修几年",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "wrong-food-scope",
+      "query": "食品开封",
+      "expected": [],
+      "scope": [
+        "global",
+        "category"
+      ],
+      "category": "clothing"
+    },
+    {
+      "id": "missing-shirt-scope",
+      "query": "首次洗涤开线",
+      "expected": [],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "historical-colloquial",
+      "query": "五月份收的货几天能退",
+      "relevant_date": "2026-05-15T00:00:00Z",
+      "expected": [
+        [
+          "demo-return",
+          1,
+          0
+        ]
+      ],
+      "scope": [
+        "global"
+      ]
+    },
+    {
+      "id": "scope-conflict",
+      "query": "退货",
+      "product_id": "1ceabd9c-f32f-5e11-9852-e238b0db9c4e",
+      "category": "food",
+      "expected": [],
+      "scope": [
+        "global"
+      ],
+      "expected_error": "ValueError"
+    }
+  ],
+  "version": "rag-v2.0"
+}

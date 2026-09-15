@@ -1,6 +1,8 @@
 import re
 from datetime import UTC, datetime
 from uuid import UUID
+from typing import Literal
+from app.core.observability import observed
 
 from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,9 +24,13 @@ def fuse_ranks(vector_ids: list[UUID], keyword_ids: list[UUID]) -> list[tuple[UU
     return sorted(scores.items(), key=lambda item: -item[1])
 
 
+@observed("rag")
 async def search_after_sales_policy(session: AsyncSession, query: str, *, product_id: UUID | None = None,
         category_code: str | None = None, relevant_date: datetime | None = None, limit: int | None = None,
-        settings: Settings | None = None, embedding: EmbeddingProvider | None = None) -> list[PolicyHit]:
+        settings: Settings | None = None, embedding: EmbeddingProvider | None = None,
+        mode: Literal["vector", "keyword", "hybrid"] = "hybrid") -> list[PolicyHit]:
+    if mode not in {"vector", "keyword", "hybrid"}:
+        raise ValueError("invalid_retrieval_mode")
     params = PolicySearchInput(query=query, product_id=product_id, category=category_code,
                                relevant_date=relevant_date, limit=limit)
     settings = settings or get_settings()
@@ -57,22 +63,26 @@ async def search_after_sales_policy(session: AsyncSession, query: str, *, produc
     base = select(chunk, doc).join(doc, chunk.document_id == doc.id).where(*filters)
     if await session.scalar(base.with_only_columns(chunk.id).limit(1)) is None:
         return []
-    vector = validate_vectors(await embedding.embed([query]), 1, settings.embedding_dim)[0]
-    # CASE protects the distance operation even if PostgreSQL reorders WHERE predicates.
-    safe_vector = case((and_(chunk.embedding_model == embedding.model,
-        func.vector_dims(chunk.embedding) == len(vector)), chunk.embedding), else_=None)
-    similarity = 1 - safe_vector.cosine_distance(vector)
-    # ponytail: exact vector and substring scans suit this small corpus; add indexes only after query-plan evidence.
-    vector_rows = list((await session.execute(base.add_columns(similarity.label("similarity"))
-        .where(similarity >= settings.rag_min_similarity)
-        .order_by(similarity.desc(), doc.document_key, doc.version, chunk.chunk_index).limit(k * 4))).all())
+    vector_rows = []
+    if mode != "keyword":
+        vector = validate_vectors(await embedding.embed([query]), 1, settings.embedding_dim)[0]
+        # CASE protects the distance operation even if PostgreSQL reorders WHERE predicates.
+        safe_vector = case((and_(chunk.embedding_model == embedding.model,
+            func.vector_dims(chunk.embedding) == len(vector)), chunk.embedding), else_=None)
+        similarity = 1 - safe_vector.cosine_distance(vector)
+        # ponytail: exact vector and substring scans suit this small corpus; add indexes only after query-plan evidence.
+        vector_rows = list((await session.execute(base.add_columns(similarity.label("similarity"))
+            .where(similarity >= settings.rag_min_similarity)
+            .order_by(similarity.desc(), doc.document_key, doc.version, chunk.chunk_index).limit(k * 4))).all())
     # Keep English words and overlapping Chinese bigrams; all matches are bound/escaped literals.
     tokens = list(dict.fromkeys(m.group(1) or m.group() for m in re.finditer(
         r"[a-z0-9]+|(?=([\u4e00-\u9fff]{2}))", query.lower())))[:100]
     keyword_score = sum((case((chunk.content.icontains(t, autoescape=True), 1), else_=0) for t in tokens),
                         case((chunk.content.icontains(query, autoescape=True), 2), else_=0))
-    keyword_rows = list((await session.execute(base.where(keyword_score > 0)
-        .order_by(keyword_score.desc(), doc.document_key, doc.version, chunk.chunk_index).limit(k * 4))).all())
+    keyword_rows = []
+    if mode != "vector":
+        keyword_rows = list((await session.execute(base.where(keyword_score > 0)
+            .order_by(keyword_score.desc(), doc.document_key, doc.version, chunk.chunk_index).limit(k * 4))).all())
     vector_ids = [c.id for c, d, s in vector_rows]
     keyword_ids = [c.id for c, d in keyword_rows]
     rows = {c.id: (c, d) for c, d in keyword_rows}

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError, TimeoutError as PoolTimeoutError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.observability import observed
 from app.core.security import RequestContext
 from app.core.config import Settings
 from app.rag.embedding import EmbeddingProvider
@@ -151,6 +152,7 @@ def tool_schemas(*, include_write: bool = False) -> list[dict[str, object]]:
     return [tool.schema() for tool in (*TOOLS.values(), *(WRITE_TOOLS.values() if include_write else ()))]
 
 
+@observed("tool")
 async def invoke_tool(
     name: str, arguments: object, *, session: AsyncSession, context: RequestContext,
     settings: Settings | None = None, embedding: EmbeddingProvider | None = None,

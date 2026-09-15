@@ -433,3 +433,10 @@ reject 不更新订单、不创建退款；仍保存拒绝回执及 Audit。写�
 默认身份依赖仍返回 401。仅 development/test 可显式配置 DEV_ACTOR_ID 为现有本地用户，服务端固定授予 orders:read:self、orders:cancel:self、refunds:request:self；每次检查用户 active。production 拒绝该配置。Header/请求体不能指定 actor/permissions。正式认证仍未接入，此开发入口只在本机使用。
 
 参考：[官方 Interrupt/Resume 语义](https://docs.langchain.com/oss/python/langgraph/interrupts)、[官方 Postgres checkpoint 包](https://pypi.org/project/langgraph-checkpoint-postgres/)。实际验证结果以 PROJECT_STATE 为准。
+
+
+## Phase 07 Eval & Observability
+
+评估入口 `scripts/agent_eval.py` 复用 Agent/Registry/RAG 和 Phase 06 PostgreSQL 夹具；独立版本化 oracle 不进入模型消息。Fake 脚本只衡量指定轨迹执行，Live 子集才用于模型能力评估，评分和限制见 [Eval Summary](eval/eval_summary.md)。
+
+检索增加仅由内部评估入口选择的 vector/keyword/hybrid 模式，业务 Tool Schema 不暴露 mode，默认 Hybrid 行为不变，未引入 Reranker。日志使用标准库 logging/ContextVar 与字段白名单，贯穿模型、工具、检索和持久化发起/恢复，完整业务结果不进入开发日志。评估数据只在专用测试库回滚或按本轮 UUID 清理，无新业务 Tool、迁移或监控平台。

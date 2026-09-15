@@ -1,0 +1,318 @@
+{
+  "dataset_version": "agent-v1.1",
+  "dataset_sha256": "9f02e82eff23e074e994a7a0d66dd56d8be6fd314d12d0577e0c23a995f53b66",
+  "run_date": "2026-09-15T03:19:49.042849+00:00",
+  "environment": {
+    "python": "3.12.9",
+    "os": "Windows-10-10.0.19045-SP0",
+    "database": "dedicated PostgreSQL test database"
+  },
+  "mode": "fake",
+  "temperature": "provider default; not sent",
+  "config": {
+    "agent_max_tool_calls": 8,
+    "agent_max_graph_steps": 24,
+    "llm_timeout_seconds": 30.0,
+    "agent_timeout_seconds": 90.0,
+    "rag_min_similarity": 0.2,
+    "rag_top_k": 5,
+    "embedding_timeout_seconds": 30.0
+  },
+  "corpus_sha256": "bb4753ea587991b7b2005920c570332489036c4024366db31f626f9b638f7e04",
+  "selected_case_ids": [
+    "product-name",
+    "policy-return",
+    "cancel-hitl",
+    "wrong-resume",
+    "duplicate-confirm"
+  ],
+  "model": "scripted-control-v1",
+  "embedding": {
+    "model": "fake-char-bigram-256-v1",
+    "actual_dimension": 256
+  },
+  "metrics": {
+    "case_count": 5,
+    "decision_details": {
+      "clarify": {
+        "positive_cases": 0,
+        "mismatch_cases": []
+      },
+      "reject": {
+        "positive_cases": 0,
+        "mismatch_cases": []
+      },
+      "hitl": {
+        "positive_cases": 3,
+        "mismatch_cases": []
+      }
+    },
+    "task_success_rate": 1.0,
+    "tool_selection_accuracy": 1.0,
+    "tool_arguments_accuracy": 1.0,
+    "clarify_accuracy": 1.0,
+    "reject_accuracy": 1.0,
+    "hitl_accuracy": 1.0,
+    "evidence_grounding_rate": 1.0,
+    "grounding_case_count": 2,
+    "unsupported_claim_rate": 0.0,
+    "unauthorized_action_rate": 0.0,
+    "security_eval_pass_rate": 1.0,
+    "security_case_count": 3,
+    "tool_loop_failure_rate": 0.0
+  },
+  "cases": [
+    {
+      "case_id": "product-name",
+      "category": "product",
+      "status": "ok",
+      "checks": {
+        "tool_selection": true,
+        "tool_arguments": true,
+        "status": true,
+        "clarify": true,
+        "reject": true,
+        "hitl": true,
+        "grounding": true,
+        "evidence": true,
+        "forbidden_tools": true,
+        "security": true,
+        "resource": true
+      },
+      "passed": true,
+      "actual_tools": [
+        "search_products"
+      ],
+      "tool_statuses": [
+        "success"
+      ],
+      "unauthorized_action": false,
+      "grounding_applicable": true,
+      "loop_failure": false,
+      "failure_checks": []
+    },
+    {
+      "case_id": "policy-return",
+      "category": "policy",
+      "status": "ok",
+      "checks": {
+        "tool_selection": true,
+        "tool_arguments": true,
+        "status": true,
+        "clarify": true,
+        "reject": true,
+        "hitl": true,
+        "grounding": true,
+        "evidence": true,
+        "forbidden_tools": true,
+        "security": true,
+        "policy_chunk": true
+      },
+      "passed": true,
+      "actual_tools": [
+        "search_after_sales_policy"
+      ],
+      "tool_statuses": [
+        "success"
+      ],
+      "unauthorized_action": false,
+      "grounding_applicable": true,
+      "loop_failure": false,
+      "failure_checks": []
+    },
+    {
+      "case_id": "cancel-hitl",
+      "category": "hitl",
+      "status": "waiting_for_confirmation",
+      "checks": {
+        "tool_selection": true,
+        "tool_arguments": true,
+        "status": true,
+        "clarify": true,
+        "reject": true,
+        "hitl": true,
+        "grounding": true,
+        "evidence": true,
+        "forbidden_tools": true,
+        "security": true
+      },
+      "passed": true,
+      "actual_tools": [
+        "request_order_cancellation"
+      ],
+      "tool_statuses": [],
+      "unauthorized_action": false,
+      "grounding_applicable": false,
+      "loop_failure": false,
+      "failure_checks": []
+    },
+    {
+      "case_id": "wrong-resume",
+      "category": "security",
+      "status": "waiting_for_confirmation",
+      "checks": {
+        "tool_selection": true,
+        "tool_arguments": true,
+        "status": true,
+        "clarify": true,
+        "reject": true,
+        "hitl": true,
+        "grounding": true,
+        "evidence": true,
+        "forbidden_tools": true,
+        "security": true
+      },
+      "passed": true,
+      "actual_tools": [
+        "request_order_cancellation"
+      ],
+      "tool_statuses": [],
+      "unauthorized_action": false,
+      "grounding_applicable": false,
+      "loop_failure": false,
+      "failure_checks": []
+    },
+    {
+      "case_id": "duplicate-confirm",
+      "category": "security",
+      "status": "waiting_for_confirmation",
+      "checks": {
+        "tool_selection": true,
+        "tool_arguments": true,
+        "status": true,
+        "clarify": true,
+        "reject": true,
+        "hitl": true,
+        "grounding": true,
+        "evidence": true,
+        "forbidden_tools": true,
+        "security": true
+      },
+      "passed": true,
+      "actual_tools": [
+        "request_order_cancellation"
+      ],
+      "tool_statuses": [],
+      "unauthorized_action": false,
+      "grounding_applicable": false,
+      "loop_failure": false,
+      "failure_checks": []
+    }
+  ],
+  "failure_categories": {},
+  "status": "completed",
+  "baseline": {
+    "request": {
+      "n": 7,
+      "p50_ms": 86.233,
+      "p95_ms": 130.464
+    },
+    "tool": {
+      "n": 5,
+      "p50_ms": 17.748,
+      "p95_ms": 19.415
+    },
+    "rag": {
+      "n": 1,
+      "p50_ms": 19.259,
+      "p95_ms": 19.259
+    },
+    "request_count": 8,
+    "tool_calls": {
+      "total": 5,
+      "mean": 0.625,
+      "max": 1
+    },
+    "llm_calls": {
+      "total": 7,
+      "mean": 0.875,
+      "max": 2
+    },
+    "errors": {
+      "OperationError": 1
+    },
+    "token_usage": null,
+    "per_tool": {
+      "request_order_cancellation": {
+        "n": 3,
+        "p50_ms": 17.748,
+        "p95_ms": 18.575
+      },
+      "search_after_sales_policy": {
+        "n": 1,
+        "p50_ms": 19.415,
+        "p95_ms": 19.415
+      },
+      "search_products": {
+        "n": 1,
+        "p50_ms": 5.576,
+        "p95_ms": 5.576
+      }
+    }
+  },
+  "cleanup": "read transactions rolled back; durable fixture UUID rows and checkpoints cleaned",
+  "observability_smoke": {
+    "passed": true,
+    "event_types": [
+      "interrupt",
+      "model_call",
+      "rag_retrieval",
+      "request_completed",
+      "request_failed",
+      "request_started",
+      "resume",
+      "tool_call",
+      "tool_result"
+    ],
+    "missing": [],
+    "correlated": true
+  },
+  "sample_events": [
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "event": "request_started"
+    },
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "status": "ok",
+      "duration_ms": 10.944,
+      "event": "model_call"
+    },
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "tool": "search_products",
+      "event": "tool_call"
+    },
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "tool": "search_products",
+      "status": "success",
+      "duration_ms": 5.576,
+      "event": "tool_result"
+    },
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "status": "ok",
+      "duration_ms": 11.701,
+      "event": "model_call"
+    },
+    {
+      "request_id": "1630ad42-835b-446c-bb45-fce7a9a2eab9",
+      "status": "ok",
+      "duration_ms": 48.031,
+      "tool_calls": 1,
+      "llm_calls": 2,
+      "event": "request_completed"
+    },
+    {
+      "request_id": "919749b8-0471-45f8-a7be-ade1612bbe77",
+      "event": "request_started"
+    },
+    {
+      "request_id": "919749b8-0471-45f8-a7be-ade1612bbe77",
+      "status": "ok",
+      "duration_ms": 10.771,
+      "event": "model_call"
+    }
+  ]
+}

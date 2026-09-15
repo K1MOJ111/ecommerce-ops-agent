@@ -283,3 +283,9 @@ git diff --check
 ```
 
 Checkpoint infrastructure 位于 agent_checkpoints schema，显式 setup 可重复运行。测试后保留空 checkpoint 表及自有迁移版本；应用业务表迁移仍由 Alembic 0002 管理。不要通过清理 checkpoint 来“重置”已执行操作，幂等回执需要保留。当前没有数据保留/归档任务，也没有生产认证、支付、前端或复杂审批流。
+
+## Phase 07 评估与日志
+
+独立 Agent/RAG 数据集、评分口径、运行命令和边界见 [Eval Summary](docs/eval/eval_summary.md)。入口是 `python -m scripts.agent_eval agent|rag|smoke`，需已有专用 `TEST_DATABASE_URL`；报告默认不覆盖，复跑使用 `--report` 指定新路径。`--live` 只在明确调用真实 Provider 时使用，缺配置生成 blocked 报告。
+
+API 启动时启用 `ecommerce.observability` JSON 行日志，只记录关联 ID、状态、耗时和计数，不包含 Prompt、工具参数或完整结果。Fake 脚本控制实验不代表真实模型的工具选择质量；Live LLM 与 Live Embedding 分别报告。

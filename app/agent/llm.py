@@ -7,6 +7,7 @@ from typing import Literal, NotRequired, Protocol, TypedDict
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from app.core.observability import emit
 from app.core.config import Settings
 
 
@@ -104,7 +105,12 @@ class OpenAICompatibleModel:
         except httpx.RequestError:
             raise LLMError("llm_unavailable") from None
         try:
-            choice = response.json()["choices"][0]
+            payload = response.json()
+            usage = payload.get("usage") or {}
+            emit("model_usage", **{key: value for key, value in usage.items()
+                if key in {"prompt_tokens", "completion_tokens", "total_tokens"}
+                and type(value) is int and value >= 0})
+            choice = payload["choices"][0]
             if choice["finish_reason"] not in {"stop", "tool_calls"}:
                 raise ValueError("incomplete_reply")
             message = choice["message"]

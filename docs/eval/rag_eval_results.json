@@ -1,0 +1,1426 @@
+{
+  "dataset_version": "rag-v2.0",
+  "dataset_sha256": "5af51c9fa2d53cd4f2b3f6894bdfc8cb6e76cb5026a7f952388db25fbcd746d4",
+  "run_date": "2026-09-15T03:19:45.469819+00:00",
+  "environment": {
+    "python": "3.12.9",
+    "os": "Windows-10-10.0.19045-SP0",
+    "database": "dedicated PostgreSQL test database"
+  },
+  "mode": "fake",
+  "temperature": "provider default; not sent",
+  "config": {
+    "agent_max_tool_calls": 8,
+    "agent_max_graph_steps": 24,
+    "llm_timeout_seconds": 30.0,
+    "agent_timeout_seconds": 90.0,
+    "rag_min_similarity": 0.2,
+    "rag_top_k": 5,
+    "embedding_timeout_seconds": 30.0
+  },
+  "corpus_sha256": "bb4753ea587991b7b2005920c570332489036c4024366db31f626f9b638f7e04",
+  "selected_case_ids": [
+    "return-current",
+    "exchange-category",
+    "shirt-specific",
+    "shipping",
+    "shipped-cancel",
+    "food",
+    "historic-return",
+    "expired-excluded",
+    "draft-excluded",
+    "archived-excluded",
+    "future-excluded",
+    "unknown",
+    "no-category-scope",
+    "return-colloquial",
+    "return-synonym",
+    "return-incomplete",
+    "return-typo",
+    "exchange-colloquial",
+    "exchange-synonym",
+    "shirt-short-name",
+    "shirt-quality",
+    "shipping-colloquial",
+    "shipping-synonym",
+    "intercept-colloquial",
+    "food-colloquial",
+    "food-similar",
+    "exchange-similar",
+    "unknown-price",
+    "unknown-warranty",
+    "wrong-food-scope",
+    "missing-shirt-scope",
+    "historical-colloquial",
+    "scope-conflict"
+  ],
+  "model": "fake-char-bigram-256-v1",
+  "embedding": {
+    "model": "fake-char-bigram-256-v1",
+    "actual_dimension": 256
+  },
+  "ablation": [
+    {
+      "dataset_version": "rag-v2.0",
+      "mode": "vector",
+      "provider": "fake-char-bigram-256-v1",
+      "k": 3,
+      "positive_cases": 22,
+      "negative_cases": 10,
+      "input_error_cases": 1,
+      "input_error_accuracy": 1.0,
+      "latency": {
+        "n": 33,
+        "p50_ms": 5.776,
+        "p95_ms": 14.86
+      },
+      "hit_at_k": 0.36363636363636365,
+      "mrr": 0.36363636363636365,
+      "no_result_accuracy": 1.0,
+      "scope_accuracy": 1.0,
+      "cases": [
+        {
+          "id": "return-current",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 16.448,
+          "passed": false
+        },
+        {
+          "id": "exchange-category",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 11.171,
+          "passed": true
+        },
+        {
+          "id": "shirt-specific",
+          "found": [
+            [
+              "demo-shirt",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 14.86,
+          "passed": true
+        },
+        {
+          "id": "shipping",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.623,
+          "passed": true
+        },
+        {
+          "id": "shipped-cancel",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.038,
+          "passed": true
+        },
+        {
+          "id": "food",
+          "found": [
+            [
+              "demo-food",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 7.972,
+          "passed": true
+        },
+        {
+          "id": "historic-return",
+          "found": [
+            [
+              "demo-return",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.812,
+          "passed": true
+        },
+        {
+          "id": "expired-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.752,
+          "passed": true
+        },
+        {
+          "id": "draft-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.872,
+          "passed": true
+        },
+        {
+          "id": "archived-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.202,
+          "passed": true
+        },
+        {
+          "id": "future-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.783,
+          "passed": true
+        },
+        {
+          "id": "unknown",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.25,
+          "passed": true
+        },
+        {
+          "id": "no-category-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.183,
+          "passed": true
+        },
+        {
+          "id": "return-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.776,
+          "passed": false
+        },
+        {
+          "id": "return-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.437,
+          "passed": false
+        },
+        {
+          "id": "return-incomplete",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 3.761,
+          "passed": false
+        },
+        {
+          "id": "return-typo",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.839,
+          "passed": false
+        },
+        {
+          "id": "exchange-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.846,
+          "passed": false
+        },
+        {
+          "id": "exchange-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.49,
+          "passed": false
+        },
+        {
+          "id": "shirt-short-name",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.181,
+          "passed": false
+        },
+        {
+          "id": "shirt-quality",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.411,
+          "passed": false
+        },
+        {
+          "id": "shipping-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.454,
+          "passed": false
+        },
+        {
+          "id": "shipping-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.668,
+          "passed": false
+        },
+        {
+          "id": "intercept-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.38,
+          "passed": false
+        },
+        {
+          "id": "food-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.368,
+          "passed": false
+        },
+        {
+          "id": "food-similar",
+          "found": [
+            [
+              "demo-food",
+              1,
+              0
+            ],
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.795,
+          "passed": true
+        },
+        {
+          "id": "exchange-similar",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.523,
+          "passed": true
+        },
+        {
+          "id": "unknown-price",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.36,
+          "passed": true
+        },
+        {
+          "id": "unknown-warranty",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.29,
+          "passed": true
+        },
+        {
+          "id": "wrong-food-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.448,
+          "passed": true
+        },
+        {
+          "id": "missing-shirt-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.599,
+          "passed": true
+        },
+        {
+          "id": "historical-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.216,
+          "passed": false
+        },
+        {
+          "id": "scope-conflict",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": "ValueError",
+          "latency_ms": 1.339,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "dataset_version": "rag-v2.0",
+      "mode": "keyword",
+      "provider": "fake-char-bigram-256-v1",
+      "k": 3,
+      "positive_cases": 22,
+      "negative_cases": 10,
+      "input_error_cases": 1,
+      "input_error_accuracy": 1.0,
+      "latency": {
+        "n": 33,
+        "p50_ms": 8.004,
+        "p95_ms": 12.465
+      },
+      "hit_at_k": 0.6363636363636364,
+      "mrr": 0.6136363636363636,
+      "no_result_accuracy": 0.9,
+      "scope_accuracy": 1.0,
+      "cases": [
+        {
+          "id": "return-current",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.015,
+          "passed": true
+        },
+        {
+          "id": "exchange-category",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.612,
+          "passed": true
+        },
+        {
+          "id": "shirt-specific",
+          "found": [
+            [
+              "demo-shirt",
+              1,
+              0
+            ],
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 11.214,
+          "passed": true
+        },
+        {
+          "id": "shipping",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.016,
+          "passed": true
+        },
+        {
+          "id": "shipped-cancel",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 10.099,
+          "passed": true
+        },
+        {
+          "id": "food",
+          "found": [
+            [
+              "demo-food",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.224,
+          "passed": true
+        },
+        {
+          "id": "historic-return",
+          "found": [
+            [
+              "demo-return",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.21,
+          "passed": true
+        },
+        {
+          "id": "expired-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.163,
+          "passed": true
+        },
+        {
+          "id": "draft-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 3.968,
+          "passed": true
+        },
+        {
+          "id": "archived-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 3.874,
+          "passed": true
+        },
+        {
+          "id": "future-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.851,
+          "passed": true
+        },
+        {
+          "id": "unknown",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.305,
+          "passed": true
+        },
+        {
+          "id": "no-category-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 3.958,
+          "passed": true
+        },
+        {
+          "id": "return-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.589,
+          "passed": false
+        },
+        {
+          "id": "return-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 57.172,
+          "passed": false
+        },
+        {
+          "id": "return-incomplete",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ],
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.98,
+          "passed": true
+        },
+        {
+          "id": "return-typo",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.984,
+          "passed": true
+        },
+        {
+          "id": "exchange-colloquial",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 11.202,
+          "passed": true
+        },
+        {
+          "id": "exchange-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.392,
+          "passed": false
+        },
+        {
+          "id": "shirt-short-name",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 12.465,
+          "passed": false
+        },
+        {
+          "id": "shirt-quality",
+          "found": [
+            [
+              "demo-shirt",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.004,
+          "passed": true
+        },
+        {
+          "id": "shipping-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 10.974,
+          "passed": false
+        },
+        {
+          "id": "shipping-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.398,
+          "passed": false
+        },
+        {
+          "id": "intercept-colloquial",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 10.785,
+          "passed": true
+        },
+        {
+          "id": "food-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.759,
+          "passed": false
+        },
+        {
+          "id": "food-similar",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ],
+            [
+              "demo-food",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 2,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.51,
+          "passed": true
+        },
+        {
+          "id": "exchange-similar",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ],
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 10.686,
+          "passed": true
+        },
+        {
+          "id": "unknown-price",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.027,
+          "passed": false
+        },
+        {
+          "id": "unknown-warranty",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.102,
+          "passed": true
+        },
+        {
+          "id": "wrong-food-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.335,
+          "passed": true
+        },
+        {
+          "id": "missing-shirt-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.235,
+          "passed": true
+        },
+        {
+          "id": "historical-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 4.846,
+          "passed": false
+        },
+        {
+          "id": "scope-conflict",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": "ValueError",
+          "latency_ms": 1.144,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "dataset_version": "rag-v2.0",
+      "mode": "hybrid",
+      "provider": "fake-char-bigram-256-v1",
+      "k": 3,
+      "positive_cases": 22,
+      "negative_cases": 10,
+      "input_error_cases": 1,
+      "input_error_accuracy": 1.0,
+      "latency": {
+        "n": 33,
+        "p50_ms": 6.95,
+        "p95_ms": 9.949
+      },
+      "hit_at_k": 0.6363636363636364,
+      "mrr": 0.6363636363636364,
+      "no_result_accuracy": 0.9,
+      "scope_accuracy": 1.0,
+      "cases": [
+        {
+          "id": "return-current",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.095,
+          "passed": true
+        },
+        {
+          "id": "exchange-category",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 7.362,
+          "passed": true
+        },
+        {
+          "id": "shirt-specific",
+          "found": [
+            [
+              "demo-shirt",
+              1,
+              0
+            ],
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.406,
+          "passed": true
+        },
+        {
+          "id": "shipping",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.719,
+          "passed": true
+        },
+        {
+          "id": "shipped-cancel",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.676,
+          "passed": true
+        },
+        {
+          "id": "food",
+          "found": [
+            [
+              "demo-food",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.315,
+          "passed": true
+        },
+        {
+          "id": "historic-return",
+          "found": [
+            [
+              "demo-return",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.711,
+          "passed": true
+        },
+        {
+          "id": "expired-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.966,
+          "passed": true
+        },
+        {
+          "id": "draft-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.712,
+          "passed": true
+        },
+        {
+          "id": "archived-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.138,
+          "passed": true
+        },
+        {
+          "id": "future-excluded",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.248,
+          "passed": true
+        },
+        {
+          "id": "unknown",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.99,
+          "passed": true
+        },
+        {
+          "id": "no-category-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 5.335,
+          "passed": true
+        },
+        {
+          "id": "return-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.341,
+          "passed": false
+        },
+        {
+          "id": "return-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.715,
+          "passed": false
+        },
+        {
+          "id": "return-incomplete",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ],
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.067,
+          "passed": true
+        },
+        {
+          "id": "return-typo",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.081,
+          "passed": true
+        },
+        {
+          "id": "exchange-colloquial",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.209,
+          "passed": true
+        },
+        {
+          "id": "exchange-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.448,
+          "passed": false
+        },
+        {
+          "id": "shirt-short-name",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.949,
+          "passed": false
+        },
+        {
+          "id": "shirt-quality",
+          "found": [
+            [
+              "demo-shirt",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 10.234,
+          "passed": true
+        },
+        {
+          "id": "shipping-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.63,
+          "passed": false
+        },
+        {
+          "id": "shipping-synonym",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.268,
+          "passed": false
+        },
+        {
+          "id": "intercept-colloquial",
+          "found": [
+            [
+              "demo-shipping",
+              1,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 7.346,
+          "passed": true
+        },
+        {
+          "id": "food-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.759,
+          "passed": false
+        },
+        {
+          "id": "food-similar",
+          "found": [
+            [
+              "demo-food",
+              1,
+              0
+            ],
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.88,
+          "passed": true
+        },
+        {
+          "id": "exchange-similar",
+          "found": [
+            [
+              "demo-exchange",
+              1,
+              0
+            ],
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": 1,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 9.249,
+          "passed": true
+        },
+        {
+          "id": "unknown-price",
+          "found": [
+            [
+              "demo-return",
+              2,
+              0
+            ]
+          ],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.785,
+          "passed": false
+        },
+        {
+          "id": "unknown-warranty",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 6.95,
+          "passed": true
+        },
+        {
+          "id": "wrong-food-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 8.302,
+          "passed": true
+        },
+        {
+          "id": "missing-shirt-scope",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 7.613,
+          "passed": true
+        },
+        {
+          "id": "historical-colloquial",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": false,
+          "scope_ok": true,
+          "error": null,
+          "latency_ms": 7.46,
+          "passed": false
+        },
+        {
+          "id": "scope-conflict",
+          "found": [],
+          "expected_rank": null,
+          "expected_empty": true,
+          "scope_ok": true,
+          "error": "ValueError",
+          "latency_ms": 1.123,
+          "passed": true
+        }
+      ]
+    }
+  ],
+  "case_count": 33,
+  "status": "completed",
+  "baseline": {
+    "request": {
+      "n": 0,
+      "p50_ms": null,
+      "p95_ms": null
+    },
+    "tool": {
+      "n": 0,
+      "p50_ms": null,
+      "p95_ms": null
+    },
+    "rag": {
+      "n": 99,
+      "p50_ms": 6.328,
+      "p95_ms": 11.089
+    },
+    "request_count": 0,
+    "tool_calls": {
+      "total": 0,
+      "mean": null,
+      "max": 0
+    },
+    "llm_calls": {
+      "total": 0,
+      "mean": null,
+      "max": 0
+    },
+    "errors": {
+      "ValueError": 3
+    },
+    "token_usage": null,
+    "per_tool": {}
+  },
+  "cleanup": "read transactions rolled back; durable fixture UUID rows and checkpoints cleaned"
+}
