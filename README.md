@@ -158,7 +158,10 @@ Remove-Item Env:\TEST_DATABASE_URL,Env:\MIGRATION_DATABASE_URL
 
 ## Project Status
 
-当前为 **Stable Preview**：Phase 07 离线交付完成，Phase 08 未开始；本地公开准备审核通过，尚未 push 或创建 Release。技术状态、验证记录与后续事项见 [PROJECT_STATE.md](PROJECT_STATE.md)。
+当前为 **Stable Preview**：Phase 07 离线交付完成并已公开发布，
+稳定预览标签为 `v0.7-preview`；Phase 08 尚未开始。
+
+技术状态、验证记录与后续事项见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
 ## License
 
