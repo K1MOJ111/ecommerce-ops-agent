@@ -41,8 +41,9 @@ async def response(row: AgentWorkflow, session: AsyncSession, context: RequestCo
         # Reject the whole payload: its rendered text also embeds the protected evidence.
         raise OperationError("not_accessible", 403) from None
     correlate(thread_id=row.id, operation_id=row.operation_id)
-    return WorkflowResponse(thread_id=row.id, status=row.status, operation_id=row.operation_id,
-                            draft=row.draft, result=row.result)
+    return WorkflowResponse(thread_id=row.id, request_id=row.request_id, confirmation=row.confirmation,
+                            status=row.status, operation_id=row.operation_id,
+                            draft=row.draft, result={k: v for k, v in row.result.items() if k != "_clarification_key"} if row.result else None)
 
 
 async def get_workflow(thread_id: UUID, *, context: AgentContext) -> WorkflowResponse:
@@ -54,8 +55,33 @@ async def get_workflow(thread_id: UUID, *, context: AgentContext) -> WorkflowRes
 async def start_workflow(request: StartRequest, *, context: AgentContext) -> WorkflowResponse:
     request = StartRequest.model_validate(request)
     digest = sha256(request.message.encode()).hexdigest()
+    state = None
+    if request.clarification_thread_id:
+        digest = sha256(f"{request.clarification_thread_id}:{request.message}".encode()).hexdigest()
     async with context.sessions() as session, session.begin():
         await verify_actor(session, context.request)
+        if request.clarification_thread_id:
+            parent = await owned_workflow(session, context.request, request.clarification_thread_id, lock=True)
+            await response(parent, session, context.request)
+            if parent.status != "completed" or parent.operation_id or (parent.result or {}).get("kind") != "clarify":
+                raise OperationError("not_waiting_for_clarification")
+            if parent.result.get("_clarification_key", str(request.request_key)) != str(request.request_key):
+                raise OperationError("clarification_already_answered")
+            async with checkpoint_session(context.settings.database_url.get_secret_value(), parent.id) as saver:
+                snapshot = await build_graph(checkpointer=saver).aget_state({"configurable": {"thread_id": str(parent.id)}})
+            if not snapshot.values or snapshot.next:
+                raise OperationError("clarification_checkpoint_missing", 503)
+            depth = snapshot.values.get("clarification_depth", 0) + 1
+            history = [m for m in snapshot.values["messages"] if m["role"] == "user"
+                       or (m["role"] == "assistant" and not m.get("tool_calls"))]
+            if depth > 16 or sum(len(m.get("content") or "") for m in history) + len(request.message) > 30000:
+                raise OperationError("clarification_limit")
+            state = initial_state(request.message, writable=True)
+            state["messages"] = state["messages"][:1] + history + state["messages"][1:]
+            state.update(pending_question=parent.result["question"], clarification_depth=depth,
+                         intent=snapshot.values.get("intent"))
+            # Claim one successor under the parent row lock; retries must reuse their original key.
+            parent.result = {**parent.result, "_clarification_key": str(request.request_key)}
         await session.execute(insert(AgentWorkflow).values(
             id=uuid4(), actor_id=context.request.actor_id, request_key=request.request_key,
             request_id=context.request.request_id, input_hash=digest, status="running",
@@ -66,7 +92,7 @@ async def start_workflow(request: StartRequest, *, context: AgentContext) -> Wor
         if row.input_hash != digest:
             raise OperationError("request_key_reused_with_different_input")
         thread_id = row.id
-    return await _drive(thread_id, context=context, message=request.message)
+    return await _drive(thread_id, context=context, message=request.message, state=state)
 
 
 @observed("request")
@@ -75,7 +101,7 @@ async def resume_workflow(thread_id: UUID, request: ResumeRequest, *, context: A
     return await _drive(thread_id, context=context, resume=request)
 
 
-async def _drive(thread_id: UUID, *, context: AgentContext, message=None, resume=None) -> WorkflowResponse:
+async def _drive(thread_id: UUID, *, context: AgentContext, message=None, resume=None, state=None) -> WorkflowResponse:
     correlate(thread_id=thread_id)
     if resume:
         correlate(operation_id=resume.operation_id)
@@ -114,7 +140,7 @@ async def _drive(thread_id: UUID, *, context: AgentContext, message=None, resume
                 current.confirmation = resume.decision
             graph_input = None if retry_failed else Command(resume=resume.model_dump(mode="json"))
         else:
-            graph_input = None if snapshot.values else initial_state(message, writable=True)
+            graph_input = None if snapshot.values else state or initial_state(message, writable=True)
         try:
             async with asyncio.timeout(context.settings.agent_timeout_seconds):
                 output = await graph.ainvoke(graph_input, config, context=replace(context, thread_id=thread_id), durability="sync")

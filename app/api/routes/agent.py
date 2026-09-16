@@ -17,7 +17,7 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 async def agent_context(request: Request, actor: Annotated[RequestContext, Depends(get_request_context)]) -> AgentContext:
     return AgentContext(actor, request.app.state.agent_model, request.app.state.session_factory,
-                        request.app.state.settings)
+                        request.app.state.settings, embedding=getattr(request.app.state, "embedding", None))
 
 
 async def _call(awaitable):

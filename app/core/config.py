@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 from uuid import UUID
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,9 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     database_url: SecretStr
     dev_actor_id: UUID | None = None
+    agent_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
+    embedding_provider: Literal["openai_compatible", "fake"] = "openai_compatible"
+    cors_origins: list[str] = Field(default_factory=list)
     llm_base_url: str | None = None
     llm_api_key: SecretStr | None = None
     llm_model: str | None = None
@@ -55,6 +59,15 @@ class Settings(BaseSettings):
     def local_identity_only(self):
         if self.dev_actor_id is not None and self.app_env == "production":
             raise ValueError("dev_actor_id_forbidden_in_production")
+        if self.app_env == "production" and "fake" in {self.agent_provider, self.embedding_provider}:
+            raise ValueError("fake_provider_forbidden_in_production")
+        for origin in self.cors_origins:
+            url = urlsplit(origin)
+            if (url.scheme not in {"http", "https"} or not url.hostname or url.username
+                    or url.password or url.path or url.query or url.fragment or "*" in origin):
+                raise ValueError("cors_requires_explicit_origins")
+            if self.app_env == "production" and (url.scheme != "https" or url.hostname in {"localhost", "127.0.0.1", "::1"}):
+                raise ValueError("production_cors_requires_https_origin")
         return self
 
 

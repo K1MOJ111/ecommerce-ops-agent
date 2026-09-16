@@ -36,6 +36,7 @@ class OperationDraft(BaseModel):
 class StartRequest(ToolInput):
     request_key: UUID
     message: Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=10000)]
+    clarification_thread_id: UUID | None = None
 
 
 class ResumeRequest(ToolInput):
@@ -45,6 +46,8 @@ class ResumeRequest(ToolInput):
 
 class WorkflowResponse(BaseModel):
     thread_id: UUID
+    request_id: UUID
+    confirmation: Literal["confirm", "reject"] | None = None
     status: Literal["running", "waiting_for_confirmation", "completed", "succeeded", "rejected", "conflict", "failed"]
     operation_id: UUID | None = None
     draft: OperationDraft | None = None

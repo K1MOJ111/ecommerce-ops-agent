@@ -1,6 +1,6 @@
 # PROJECT_STATE
 
-> 更新：2026-09-15。技术状态与验证摘要；入口见 [README](README.md)、[架构](docs/architecture.md) 和 [Eval Summary](docs/eval/eval_summary.md)。以最新明确范围和已验证仓库事实为准，历史版本由 Git 保存。
+> 更新：2026-09-17。技术状态与验证摘要；入口见 [README](README.md)、[架构](docs/architecture.md) 和 [Eval Summary](docs/eval/eval_summary.md)。以最新明确范围和已验证仓库事实为准，历史版本由 Git 保存。
 
 ## Project Goal
 
@@ -8,16 +8,21 @@
 
 ## Current Phase
 
-**Phase 07 offline completed / awaiting public release and Phase 08**。
+**Phase 07.5 Product Frontend CLOSED**。
 
-- Phase 07 稳定提交：`75da7718e2ac35e55f072d36bd90c28c19f7b75a`；本次公开准备开始时 `master` 工作区干净。
-- Agent 46 条（agent-v1.1）、RAG 33 条（rag-v2.0）、三路消融与结构化日志已实现；阶段关闭时完整 467 项测试通过。
-- Live LLM / Embedding 均 blocked by missing configuration，兼容性与真实质量未验证。
-- Public Release Check 已审核通过；MIT LICENSE、公开展示文档与忽略规则纳入本地收口提交 `docs: prepare public preview release`。未配置 remote、push、创建 tag/Release、部署或开始 Phase 08。
+- Phase 07 已完成；本轮新增 Vue 3 / Vite / TypeScript 产品前端，不进入 Phase 08。
+- Vue 产品前端、现有 Agent API、业务证据/政策引用与 HITL UI 已实现；初版 274 项单元测试、85 项真实 PostgreSQL/HITL 通过。最新 HITL 资料展示修复后重新通过 7 项前端逻辑测试、3 项浏览器测试、类型检查与构建。
+- UI/UX Polish 完成：绿色三栏、聊天加宽、无资料右栏收窄；资料默认跟随当前会话最近有 Evidence 的回复并注明来源，点击引用切换；空白会话不入历史；工程信息默认折叠，HITL 保持明显。仅前端及验证/状态记录改动。
+- 前端局部修整：缩小每轮、消息与引用的叠加间距，保持自然块布局；业务资料与引用按钮共用成功实体/有效 Citation 过滤，失败、空结果和无实体说明只保留在技术详情，不计数；Fake Provider 改为顶部小型 Badge，移动端也可见。
+- Clarify 续接修复完成：前端引用待补请求，后端从 checkpoint 加载已接受上下文并关联下一 workflow；无效实体继续等待同一字段，刷新可恢复。保留单操作/HITL/权限/事务与数据库 schema。367 项后端相关测试、6 项前端逻辑及 3 项浏览器测试通过。
+- HITL 右栏上下文修复：waiting_for_confirmation 时只显示与 Draft target 订单 ID/订单号同时匹配的真实订单 Evidence；无匹配时仅展示后端目标编号和“暂无关联业务资料”。确认期间不允许历史引用覆盖目标资料，结束后恢复普通选择规则。本轮仅改前端展示、测试和状态文档。
+- PostgreSQL、FastAPI、Vue 已真实运行；指定八类业务场景全部通过，另验证 SKU、退款确认、拒绝/澄清、刷新恢复和确认响应丢失。Docker 经用户重启后恢复，未创建或修改 `.wslconfig`。
+- 起始 HEAD `21084aedea48f749e0a8c54d5818557de77c92b8`，工作区起始干净。实查 `v0.7-preview` 标签存在，标签对象 `c64ef9a7ef30054e80eea944c237a29e215c0598`；旧文档“未创建标签”已过时。用户已授权本次阶段提交并 push 到 main，保留远端已有 README 状态更新；不修改标签、不创建 Release。
+- Live LLM / Embedding 未配置、未验证；生产部署和 Phase 08 均 Not Started。
 
 ## Confirmed Architecture
 
-- 沿用 V0.2 单体分层；Service 直接 SQLAlchemy，无通用 Repository、Multi-Agent 或前端。原 12 表与首迁移不变；订单查询和历史回放复用同一 Service 授权规则。
+- 沿用 V0.2 单体分层；Service 直接 SQLAlchemy，无通用 Repository 或 Multi-Agent；Phase 07.5 新增独立产品前端。原 12 表与首迁移不变；订单查询和历史回放复用同一 Service 授权规则。
 - 复用真实 LangGraph 的 plan → execute_tools → plan/answer/clarify/reject；新增 confirm_operation → END。七个只读 TOOLS 与两个 WRITE_TOOLS 分开，写工具只生成持久化 Draft。
 - 旧 run_agent 保持无 checkpoint 的只读调用；新 start_workflow/get_workflow/resume_workflow 使用官方 PostgreSQL checkpoint 和可信 Runtime Context。模型、Session、权限不放 State；State 增加 draft/operation_result。
 - agent_workflows 一表保存用户归属、初始请求键、最多一个操作、首次确认及事务结果；官方 checkpoint 四表独立在 agent_checkpoints schema。
@@ -25,6 +30,8 @@
 - FastAPI 提供发起/查看/恢复接口，身份默认 401；仅显式 development/test DEV_ACTOR_ID 可启用本机固定身份，production 拒绝该配置。无正式认证、真实支付或生产部署。
 
 ## Confirmed Tech Stack
+
+- Phase 07.5：Vue 3.5.42、Vite 8.3.0、TypeScript 5.9.3、vue-tsc 3.3.11；Playwright 1.63.0 仅开发测试。Node 24.14.0 / npm 11.9.0，package-lock.json 固定安装。
 
 - 本地 Python 3.12.9；FastAPI 0.141.1、Uvicorn 0.52.4、SQLAlchemy 2.0.52、asyncpg 0.31.0、Alembic 1.20.0、Pydantic 2.13.5、pydantic-settings 2.15.0、pgvector Python 0.5.0。
 - Phase 04 新增 LangGraph 1.2.11；传递依赖 langchain-core 1.6.3。复用 httpx 0.28.1 并列入运行依赖，无供应商 SDK。
@@ -37,6 +44,10 @@
 
 | 路径 | 职责 |
 |---|---|
+| `frontend/` | Vue 产品会话、业务证据、HITL、集中 fetch API、类型及浏览器测试 |
+| `app/agent/development.py` | 无状态确定性开发 Provider，仅规划真实 Tool 调用，无业务数据或权限注入 |
+| `app/agent/clarification.py` | 共用 Clarify 字段绑定与格式校验；不查询数据、不决定身份或资源 |
+| `scripts/frontend_e2e.py` | 独立临时 PostgreSQL + 原 Seed + FastAPI + Vue 浏览器验证及数据库后置检查 |
 | `app/main.py`、`app/api/` | 应用生命周期、可信身份、健康与 Agent 发起/查看/Resume 接口 |
 | `app/core/config.py`、`security.py` | Settings、不可变 RequestContext |
 | `app/db/base.py`、`session.py`、`models/` | 原 12 表 + agent_workflows、Engine、短期 AsyncSession |
@@ -77,7 +88,12 @@
 
 ## Core Workflows
 
-- POST /agent/requests 接收 request_key/message；用户与 key 唯一，输入哈希不同拒绝复用。thread_id、operation_id 由可信代码生成。
+- Phase 07.5 前端：sessionStorage 只保存同 API/用户的请求文本、key、thread/Clarify 引用和第一次确认选择，不缓存业务证据；刷新/切换会话重新 GET 授权。后端一请求一 workflow，仅 Clarify 后继恢复已接受的用户上下文；普通新问题不继承聊天记忆。Resume/刷新沿用对应操作的 thread，失败重试沿用原 key/decision。
+- WorkflowResponse 保留 request_id/confirmation 元数据和既有 response 授权入口；Clarify 续接只改请求合约、工作流上下文加载和 planner 输入绑定，不改业务 Service、事务、数据库 Schema/Migration 或工具。
+- AGENT_PROVIDER / EMBEDDING_PROVIDER 默认 openai_compatible，development/test 可显式 fake，production 拒绝任一 fake。Embedding 复用 FakeEmbeddingProvider，图通过已有 context.embedding 注入。
+- /status 校验服务端固定身份和当前 active User，返回用户名和 Provider 安全状态；API/DB 仍由 /health/live 与 /health 探测。不返回 Key、URL、权限。CORS 开发限定 localhost/127.0.0.1:5173，生产默认关闭、显式 HTTPS 白名单。
+
+- POST /agent/requests 接收 request_key/message 和可选 clarification_thread_id；续接须属于本人、completed/clarify 且无操作，先重验历史证据授权再读取 checkpoint。父结果 JSONB 内部绑定唯一后继 key，输入哈希覆盖父引用；State pending_question/clarification_depth 支持共用格式校验和最多 16 次/30000 字符限制。不继承旧工具证据，格式错误输入不进入已接受上下文。thread_id、operation_id 由可信代码生成。
 - 所有 WorkflowResponse 返回共用 replay authorization：检查当前 active actor，从订单/物流成功 evidence 提取真实订单 ID，复用 orders Service 按当前权限和数据库 ownership 授权。GET、相同 request_key、终态 Resume 均经过检查；拒绝整个响应，避免 text/evidence 泄露。不调用 LLM、不重跑 Agent；公开商品证据不要求订单权限。
 - 写意图 → 业务授权/规则检查 → 持久化原 Draft → LangGraph interrupt → waiting_for_confirmation；此时订单/退款/Audit 尚未改变。
 - Resume：先查 active actor、当前权限和 owner，再加载 checkpoint，核对 operation_id、等待节点、原 Draft 和显式 confirm/reject；首次选择单独保存，不能改选。
@@ -98,6 +114,8 @@
 - 订单组合：get_order 授权 → 名称快照 search_products → list_product_skus 核对订单 sku_id → search_after_sales_policy；没有改变原业务 Service 合约。
 
 ## Completed
+
+- Phase 07.5 CLOSED：独立 Vue 产品前端、会话索引/安全重取、集中 API/错误提示、业务资料/政策引用、原 thread HITL Confirm/Reject、开发 Provider、状态接口和 CORS；包含 Clarify 续接与 HITL 目标资料修复。真实 E2E 与数据库后置条件通过，用户确认可收尾。
 
 - Phase 02.1 infrastructure/database baseline：工程、Settings、FastAPI、12 表 ORM、Alembic、Docker 和健康检查完成，并获审核通过。
 - Phase 02.2 seed data：64 条确定性模拟记录；本轮再次连续运行两次均新增 0/已有 64，无重复数据。
@@ -132,9 +150,11 @@
 
 ## In Progress
 
-无进行中的功能开发。首次 Public Release 本地准备已审核通过，许可确定为 MIT；等待实际 GitHub 发布的明确授权。Phase 08 未开始，Live LLM/Embedding 仍未验证。
+无进行中的功能开发。Phase 07.5 已关闭；开发 API/Vue 保持运行。后续仅按用户明确的新范围继续，Phase 08 保持 Not Started。
 
 ## Not Started
+
+- Phase 08：Not Started。
 
 - 正式认证、运行/迁移数据库角色分离、Audit 只追加数据库权限、公开部署。
 - 已付款订单取消、库存预留释放、复杂审批/真实退款打款、运费退款、多操作工作流、checkpoint/回执保留与归档策略。
@@ -189,6 +209,9 @@
 
 ## Known Issues
 
+- Fake Agent 只支持明确中文查询模板和参数，非通用语言理解；Clarify 后可只补缺少的实体，后端关联新 workflow 继续原意图。原因、退款明细 UUID/数量/金额仍须用户明确输入；不自动选资源，无通用会话记忆。
+- API 不提供实时工具事件、全部中间工具轨迹或耗时；前端展示最终返回证据，不模拟进度。关闭标签页会丢失浏览器会话索引，数据库工作流仍保留。
+
 - 正式认证、DB 最小权限角色、Audit 防篡改尚未实现；DEV_ACTOR_ID 只供本机模拟，不等于登录系统。production deployment、backup / restore、load validation 尚未完成。
 - JSONB CHECK hardening（P3 deferred）：agent_workflows.draft JSONB 内 operation_type、actor、operation_id 与列字段缺少完整数据库绑定 CHECK；保留现有应用层校验和已有数据库约束，留给 Final Hardening，不作为本轮关闭条件，未为此修改 Schema。
 - 已付款取消不支持；取消不释放库存。退款仅申请，非审批/打款；不退运费，按数量分摊向下取分，可能保守留下一分以内余数。每请求一个操作，待确认参数不能编辑。
@@ -204,6 +227,62 @@
 - 当前依赖组合尚未重新构建/部署 Linux API 镜像。
 
 ## Validation Status
+
+### Phase 07.5 收尾核对（2026-09-16–17）
+
+- 检查全部已跟踪差异与新增文件；提交候选不含临时文件、截图缓存、测试产物、node_modules、真实 .env、真实密钥或本机绝对路径。`frontend/.env.example` 仅包含公开本地 API 地址；本地配置与产物继续由忽略规则排除，不删除运行文件。
+- 复核最近通过的类型检查、构建、7 项前端逻辑、3 项浏览器与 367 项后端相关测试；代码时间戳早于对应构建/测试结果，收尾仅同步 README、架构状态和本文件，不重复大规模测试。下方早期记录保留为历史结果，不能替代最新验证。
+- 阶段提交消息：`feat: add product frontend for ecommerce ops agent`。仅提交并推送 main，不修改 `v0.7-preview`、不创建 Release，不开始 Phase 08。
+
+### HITL 资料目标关联验证（2026-09-16）
+
+- 先用前端回归测试复现：等待取消 O001 时仍选中历史 O003。修复后 `npm run typecheck`、`npm run build` 通过，`npm test` **7 passed**；覆盖目标身份匹配、无关联资料、不可用资料排除及 Reject 后恢复。
+- `python -m scripts.frontend_e2e` **3 passed in 17.8s**，无跳过；实际“查询 SEED-O003 → 取消 SEED-O001 → HITL”右栏仅显示目标 O001、计数 0、暂无关联资料，刷新后仍正确；Reject 后恢复 O003。随后查询 O001 再取消时，右栏正确展示已有的 O001 Evidence，计数 1。
+- 原有 Clarify、HITL 执行/拒绝、响应丢失、退款后置检查通过；临时测试库已清理，开发 FastAPI 8000 未改，Vue 5173 已恢复。未修改任何后端规则、Tool、Service、事务、schema 或 Agent workflow。
+
+### Clarify 续接修复验证（2026-09-16）
+
+- 修复前通过实际 API 复现：取消请求 question=order，独立发送订单号却产生新 thread / question=query；Fake 带上下文的回归测试先失败（错误规划 get_order），修复后通过。
+- `python -m pytest -q tests/unit tests/integration/test_hitl.py tests/integration/test_clarification.py`：**367 passed in 45.66s**，其中 7 项真实 PostgreSQL Clarify 测试覆盖订单/物流、格式错误、持久化恢复、取消原因、退款逐字段收集、权限/归属、重复请求及父请求唯一后继。执行隔离专用测试库。
+- OpenAICompatibleModel 使用 MockTransport 验证与 Fake 共用持久化历史和格式校验，错误格式不会调用 Provider；不代表已验证真实线上模型的语言能力。
+- `npm run typecheck`、`npm run build`、`npm test`：通过，**6 passed**；前端仅新增 Clarify 父引用的提交/恢复及相应提示，不拼接意图或代选订单。
+- `python -m scripts.frontend_e2e`：**3 passed in 16.5s**，无跳过；四种链路、无效订单号及多次浏览器刷新后继续均通过。既有 HITL/丢失回执/拒绝/退款业务后置检查通过，临时数据库已清理。
+- 开发 FastAPI 8000 / Vue 5173 已重启，仍使用 development/Fake 和模拟消费者甲；实际重新执行“查询订单 → 错误格式 → GET 恢复 → 单独订单号”成功返回 get_order，API/DB 健康。取消缺原因时仍追问，未放宽必填和人工确认规则。无 commit/push/Phase08。
+
+### Phase 07.5 局部修整复验（2026-09-16）
+
+- `npm run typecheck`、`npm run build` 退出 0；`npm test` **6 passed**，新增覆盖失败状态、空结果、无效引用、有效实体及零库存。
+- `python -m scripts.frontend_e2e` **2 passed in 15.7s**，无跳过；原隔离数据库后置检查通过、临时库清理完成。浏览器确认相邻轮次间距不超过 24px、未找到资料时右栏计数为 0 且完整返回记录留在技术详情、Fake Badge 在 390px 仍可见。
+- 已查看连续消息、空资料技术详情与移动端截图；1440px / 1920px 既有布局检查通过。FastAPI 8000 与 Vue 5173 恢复使用开发库/Fake Provider；本轮只修改前端展示、对应测试和本状态文档。
+
+### Phase 07.5 UI/UX Polish 验证（2026-09-16）
+
+- `npm run typecheck`、`npm run build` 均退出 0；`npm test` **5 passed**。
+- `python -m scripts.frontend_e2e` **2 passed in 11.6s**，无跳过；复用隔离 PostgreSQL 测试，数据库后置检查通过，临时库已清理。
+- 在原真实浏览器场景中补查：重复新建不进入历史、刷新保留空白编辑区但不存空白历史、历史重新授权取回资料、Clarify 后保留资料、点击旧引用切换及来源标注、技术信息折叠、完成请求隐藏刷新按钮。
+- 1440px / 1920px 空态与有资料态无横向溢出，截图已查看；右栏分别为 220/240px 与 340/380px，HITL 独立卡片与确认按钮保留。390px 移动端既有检查通过。
+- 本轮未改 Python、Agent workflow、Tool、RAG、事务、HITL 后端规则或数据库 schema；未重跑后端全量单元套件。仅重用原隔离测试脚本验证前后端，未对开发订单执行写操作。
+
+### Phase 07.5 初版验证（2026-09-16，Polish 前）
+
+| 实际执行 | 结果与范围 |
+|---|---|
+| `npm install` | 48 packages；锁定 Vue 3.5.42 / Vite 8.3.0 / TypeScript 5.9.3，运行依赖仅 Vue |
+| `npm run typecheck` / `npm run build` | 最终改动后均退出 0；19 modules，JS 87.60 kB / gzip 33.97 kB，CSS 9.91 kB / gzip 2.98 kB |
+| `npm test` | 最终 4 passed；请求字段/幂等 key、HTTP/超时安全错误、响应合约、JSONB 重排后的答案投影与警告保留 |
+| `python -m pytest -q tests/unit` | 本阶段 **274 passed in 4.51s**；之后 Python 实现未变，最后修复仅前端资料展示 |
+| `python -m pytest -q tests/integration/test_hitl.py` | 重启后 **85 passed in 40.51s**；真实专用 PostgreSQL，含 API/授权/恢复/幂等/并发，不是静态读取 |
+| `python -m scripts.frontend_e2e` | 最终 **2 passed in 11.7s**（真实业务浏览器场景 + 故障注入 UI 场景），无 skipped |
+| `docker compose up -d db --wait --wait-timeout 90` | PostgreSQL healthy；未构建/部署 API 镜像 |
+| `git diff --check` / `compileall` / `docker compose config --quiet` | 均退出 0；只有 Git 换行提示 |
+
+真实 E2E 使用随机临时 PostgreSQL 数据库，原迁移至 0002、原 64 条 Seed、10 份知识文档，Fake 仅替换模型 Provider。商品、SKU、库存（白色 M 可售 17）、本人订单、物流、政策标题/版本/locator/原文、取消→Reject→订单不变、取消→Confirm→cancelled、退款→HITL→Confirm→requested 均实际通过。另测缺订单澄清、他人订单拒绝、不支持操作拒绝、待确认刷新恢复、确认执行成功但响应丢失后不得提前报成功、刷新重新拿回执、HTTP 安全错误/同 key 重试、390px 无横向溢出。
+
+数据库后置条件：取消订单 cancelled；退款新增且仅 requested；原订单 payment_status 仍 paid；3 条操作 Audit。测试后临时库已删除、无 `ops_frontend_*_test` 残留；开发库 `SEED-O001` 实查仍为 pending_payment / unpaid，未被 E2E 修改。桌面政策、HITL、手机截图已人工视觉检查，仅作视觉证据；运行与 SQL 检查为业务验证依据。产物保留于 Git 忽略的 `output/playwright/`。
+
+过程中 Docker/WSL 资源不足曾阻塞，用户重启后恢复，无用户级 WSL 配置变更；首次 E2E 用户名精确定位失败（实际 /status 200），已修正定位。视觉检查发现 JSONB 重排导致刷新后原始 JSON 回显，先复现测试失败，再修复前端 renderer 并重新执行完整 E2E、前端测试/类型/构建。原有 100ms timeout 单元测试此前一次时机相关失败，单独与整套重跑后通过，未放宽阈值或改 Agent 核心逻辑。
+
+未重跑历史完整 467 项、Live LLM/Embedding、Linux 镜像或生产部署；本轮未改 Agent graph、Tool、核心业务事务、数据库模型或 Migration。49 项配置/CORS/status/Provider/基础/合约测试为 274 项中的子集，不重复累计。
 
 ### Public Release 本地准备（2026-09-15）
 
@@ -239,11 +318,25 @@
 
 ## Next Recommended Step
 
-**等待 GitHub 实际发布的明确授权。** Public Release Check 已通过，许可为 MIT。推荐以 `v0.7-preview` 表示 Phase 07 的 Stable Preview；这是候选 Git 标签，尚未创建。`pyproject.toml` 包版本仍为 `0.2.0`，本次未改，不能声称已发布 0.7 包。
+Phase 07.5 已关闭，停止本阶段开发。README 的 Frontend / Local Development 提供前后端分别启动命令；后续接手先读取本文件并核对实际 Git 状态。
 
-随后另行明确授权 GitHub 实际发布；Phase 08 仍未开始。优先待验证项仍为 Live 兼容性与真实检索质量，待解决问题仍为口语/同义召回、unknown-price 答案充分性和 checkpoint 枚举警告；其余 Final Hardening 保留在 Known Issues，不随公开准备实施。
+等待用户明确下一项任务；Live 配置与 Phase 08 需另行授权范围，Phase 08 保持 Not Started。本次不修改标签、不创建 Release、不继续美化页面。
 
 ## Change Log
+
+- 2026-09-17：用户确认 Phase 07.5 可收尾，状态更新为 Product Frontend CLOSED；完成完整差异、公开文件安全与既有验证核对，仅同步文档，保留远端 README 更新，按授权以正常阶段提交收口并推送 main。Phase 08 保持 Not Started，既有标签保留，不创建 Release。
+
+- 2026-09-16：前端修复 HITL 右栏目标混淆；资料按真实 Draft target 身份匹配，无匹配显示空态，Reject 后恢复普通规则。类型/构建、7 项逻辑和 3 项浏览器测试通过，无后端改动、commit 或 push。
+
+- 2026-09-16：修复 Clarify 上下文断链；以可选 clarification_thread_id 关联后继请求，持久化用户上下文、共用字段校验、唯一后继与原 key 重试，Fake 支持确定性的上下文读取；367 项后端、6 项前端逻辑和 3 项浏览器验证通过。无数据库迁移、权限/HITL 规则变更或提交发布。
+
+- 2026-09-16：按三项限定范围压缩聊天纵向留白、过滤业务资料收录与计数、缩小 Fake Provider 提示；6 项前端逻辑及 2 项浏览器测试通过。未改后端、HITL、schema 或 Provider 实现，无提交/推送。
+
+- 2026-09-16：完成前端 UI/UX Polish；修正右栏默认选中无资料回复导致清空的展示问题，保留真实后端 Evidence；精简历史和工程信息、优化 Clarify 与桌面比例；类型/构建、5 项逻辑及 2 项浏览器测试通过。未 commit/push，未进入 Phase 08。
+
+- 2026-09-16：重启后完成 85 项 PostgreSQL/HITL 与真实浏览器 E2E；修复前端 JSONB 重排回显并复验。Phase 07.5 改为 implemented / awaiting review，开发 Seed 未改、临时库已清理，无 WSL 配置/提交/推送/标签变更。
+
+- 2026-09-16：实现 Phase 07.5 产品前端与最小 Provider/status/CORS/响应元数据扩展；单元、类型、构建和故障注入浏览器检查通过，真实 E2E 待 Docker 恢复。纠正旧文档未创建标签的记录，保留现有 v0.7-preview；无提交或发布。
 
 - 2026-09-15：公开准备审核通过，添加标准 MIT LICENSE（Copyright 2026 K1MOJ1）及 README 许可入口，以 `docs: prepare public preview release` 本地提交收口；仅文档/忽略规则/许可，无核心代码变更。未配置 remote、push、创建 tag/Release 或开始 Phase 08。
 - 2026-09-15：首次公开准备，整理 README、架构和 Eval 说明，补充缓存及本地报告忽略规则；完整本地 Git 对象检查未发现真实凭据或客户资料。改动未提交，LICENSE 未添加，未配置远程或发布；Phase 08 未开始。

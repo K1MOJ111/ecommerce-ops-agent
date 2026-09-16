@@ -9,3 +9,5 @@ build
 dist
 docs
 tests
+frontend
+output

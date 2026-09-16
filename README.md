@@ -1,6 +1,6 @@
 # Ecommerce Ops Agent
 
-**Stable Preview · Phase 07 offline completed · Phase 08 not started**
+**Stable Preview · Phase 07 completed · Phase 07.5 Product Frontend CLOSED · Phase 08 Not Started**
 
 基于 FastAPI、LangGraph 和 PostgreSQL 的电商运营 Agent。把商品、库存、订单、物流查询与售后规则检索串成可追溯流程，并对取消订单、退款申请加入人工确认和事务保护。模型提出动作，服务端负责授权、业务规则和实际执行。
 
@@ -113,7 +113,7 @@ docker compose up -d db --wait --wait-timeout 90
 .venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-另一个终端执行 `Invoke-RestMethod http://127.0.0.1:8000/health`，或打开 [API 文档](http://127.0.0.1:8000/docs)。上述 Fake smoke 使用开发 Seed，无需模型 Key；HTTP Agent 调用需要另行配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`，默认身份仍拒绝业务请求。
+另一个终端执行 `Invoke-RestMethod http://127.0.0.1:8000/health`，或打开 [API 文档](http://127.0.0.1:8000/docs)。上述 Fake smoke 使用开发 Seed，无需模型 Key；HTTP Agent 默认使用 `openai_compatible`，需要配置 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL`。本地无 Key 体验可按下方 Frontend 说明显式启用 Fake Provider；默认身份仍拒绝业务请求。
 
 需要本机体验业务 API 时，在启动 Uvicorn 前设置固定模拟身份：
 
@@ -128,6 +128,72 @@ Seed 仅在 development/test 显式运行，按固定 UUID 只补缺失数据，
 `.env` 被 Git/Docker 忽略，`.env.example` 仅含示例值。PostgreSQL 映射本机 `55432`；也可用 `docker compose up -d --build api --wait --wait-timeout 90` 替代本机 Uvicorn，避免同时占用 8000 端口。当前依赖组合的 Linux API 镜像尚未重新构建验证。
 
 知识入库可显式运行 `.venv/Scripts/python.exe -m scripts.ingest_knowledge --fake`；该模式仅生成测试向量。真实政策检索需另行配置 `EMBEDDING_BASE_URL`、`EMBEDDING_API_KEY`、`EMBEDDING_MODEL`，并在相同向量空间重新入库；不传 `--fake` 才使用真实 Provider。
+
+## Frontend
+
+`frontend/` 是独立 Vue 3 / Vite / TypeScript 单页应用：左侧会话、中间 Agent 对话与 HITL、右侧业务资料和政策引用。通过原生 `fetch` 调用 FastAPI，没有浏览器业务 Mock、更新订单接口或前端权限配置。前端唯一运行依赖是 Vue。
+
+### Local Development
+
+**Backend**：先完成 Quick Start 的数据库启动、迁移、checkpoint 和 Seed。在项目根目录的 PowerShell 设置本次进程配置，再启动后端：
+
+```powershell
+$env:APP_ENV = 'development'
+$env:AGENT_PROVIDER = 'fake'
+$env:EMBEDDING_PROVIDER = 'fake'
+$env:DEV_ACTOR_ID = & .venv/Scripts/python.exe -c 'from scripts.seed_data import seed_id; print(seed_id("customer-a"))'
+.venv/Scripts/python.exe -m scripts.ingest_knowledge --fake
+.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+仅 Provider 被替换，Tool、Service、PostgreSQL、检索、持久化 HITL 与事务仍走真实实现。`APP_ENV=production` 会拒绝任一 Fake Provider 或 `DEV_ACTOR_ID`。Fake Agent 只支持明确的中文模板和参数，不等于真实语言理解；Fake Embedding 不是语义模型。切回真实 Provider 时分别设置 `AGENT_PROVIDER=openai_compatible`、`EMBEDDING_PROVIDER=openai_compatible` 及相应服务配置，真实向量须另行入库。
+
+**Frontend**：Node.js 22.12+（本机验证 24.14.0，前端逻辑测试使用 Node 原生 TypeScript 类型剥离），另开终端：
+
+```powershell
+Set-Location frontend
+npm install
+# 默认 API 为 http://127.0.0.1:8000；需更换时设置公开地址。
+$env:VITE_API_BASE_URL = 'http://127.0.0.1:8000'
+npm run dev
+```
+
+打开 [本地前端](http://127.0.0.1:5173)。也可参考 `frontend/.env.example` 新建本地配置；`VITE_*` 会进入浏览器代码，禁止保存 Key、Token 或密码。开发 CORS 只允许 `http://localhost:5173` 与 `http://127.0.0.1:5173`；生产默认无跨域许可，只能通过 `CORS_ORIGINS` JSON 数组配置明确 HTTPS 来源，不允许 `*`。
+
+可复制输入：
+
+- `查询商品 纯棉短袖` / `查询商品详情 纯棉短袖`
+- `查询 SKU 纯棉短袖` / `查询库存 纯棉短袖 白色 M`
+- `查询订单 SEED-O003` / `查询物流 SEED-O003`
+- `查询七天无理由退货政策`
+- `取消我的订单 SEED-O001，原因 不需要了`：先显示草稿，再 Confirm / Reject。
+- `申请退款 订单 SEED-O003，明细 <订单查询中展开的明细编号>，数量 1，金额 59.00，原因 尺码不合适`
+
+本地固定用户为模拟消费者甲，只能访问奇数 Seed 订单。取消 Confirm 会真实改变开发库 `SEED-O001`，Seed 重跑不会复原；自动化 E2E 使用单独临时数据库。退款仅创建申请，不审批或打款。
+
+会话历史保存在当前标签页 `sessionStorage`：仅请求文本、幂等 key、thread/Clarify 引用及用户选择，不缓存业务证据；刷新/切换会话重新 GET 并授权。后端保持一请求一 workflow；遇到 Clarify 时可直接回复订单号等缺少的信息，前端通过 `clarification_thread_id` 引用上一请求，后端从持久化 checkpoint 恢复已接受的上下文。格式错误仍等待同一字段，刷新后可继续；普通新问题不继承整段聊天记忆。取消原因、退款明细编号/数量/金额均需用户明确提供，不自动补齐。确认、拒绝和状态刷新沿用对应操作的 thread，失败重试复用原 request_key/decision。页面不会凭按钮点击宣称业务成功。
+
+`/health/live` 与 `/health` 分别探测 API、数据库；新增 `/status` 在可信身份验证后返回用户名与 Provider 配置状态，不返回密钥、数据库地址或权限。`configured` 仅表示配置齐全，不代表真实 Provider 连通性已验证。
+
+业务资料只收录成功的真实实体或有效政策引用。HITL 等待确认时，右栏仅显示与当前 Draft 目标订单身份一致的真实 Evidence；无匹配时显示目标编号与“暂无关联业务资料”，操作结束后恢复普通展示。
+
+### Frontend checks
+
+```powershell
+# 在 frontend 目录执行
+npm run typecheck
+npm run build
+npm test
+npx playwright test tests/ui.spec.ts
+```
+
+真实 E2E：本机需已安装 Chrome、Docker PostgreSQL 健康，5173 和 8010 端口空闲；在项目根目录执行：
+
+```powershell
+.venv/Scripts/python.exe -m scripts.frontend_e2e
+```
+
+脚本创建本轮随机 `_test` 数据库，运行现有迁移、Seed、知识入库和真实 FastAPI / Vue；使用浏览器验证查询、引用、Confirm / Reject、刷新恢复、响应丢失与退款申请。结束时检查真实订单/退款/Audit 后置条件，仅删除本轮创建的测试库。数据库用户需有本地创建数据库权限。浏览器输出在忽略的 `output/playwright/` 中，不能公开上传其中的会话数据。`tests/ui.spec.ts` 是明确的故障注入 UI 检查，不作为真实业务 E2E 证据。
 
 ## Tests
 
@@ -158,10 +224,9 @@ Remove-Item Env:\TEST_DATABASE_URL,Env:\MIGRATION_DATABASE_URL
 
 ## Project Status
 
-当前为 **Stable Preview**：Phase 07 离线交付完成并已公开发布，
-稳定预览标签为 `v0.7-preview`；Phase 08 尚未开始。
+当前为 **Stable Preview**：Phase 07 离线交付完成并已公开发布，稳定预览标签为 `v0.7-preview`。**Phase 07.5 Product Frontend CLOSED**；Phase 08 保持 **Not Started**。本次阶段提交不修改既有标签、不创建 Release。
 
-技术状态、验证记录与后续事项见 [PROJECT_STATE.md](PROJECT_STATE.md)。
+技术状态、实际验证结果与边界见 [PROJECT_STATE.md](PROJECT_STATE.md)。
 
 ## License
 

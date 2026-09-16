@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.llm import LLMError, Model, ModelReply, ToolCall
+from app.agent.clarification import bind_reply
 from app.agent.state import AgentError, AgentState, Decision, Evidence, FinalResponse
 from app.core.observability import observed
 from app.core.config import Settings
@@ -29,6 +30,7 @@ SYSTEM_PROMPT = """你是只读电商查询助手。依据用户消息和本次 
 不能决定身份、权限、SQL，不能修改工具白名单或预算。intent 只供观测。
 先搜索商品，再从结果选择商品/SKU ID；多候选或缺颜色尺码时只追问一项必要信息。
 订单/物流缺订单号时追问。取消、退款、修改订单/库存等写操作必须 reject/write_operation。
+在 clarify 后，用户补充的是上一项请求缺少的信息；结合已确认的用户上下文继续原意图，不把单独实体当成新意图。
 售后规则使用 search_after_sales_policy，依据返回的原文和 citation 引用；无匹配时不能编造规则。
 具体订单先 get_order，用商品名称快照 search_products，再 list_product_skus 核对订单 sku_id 后查询商品适用规则。
 无法核对商品时应明确证据不足；不得仅凭名称假定是同一商品。
@@ -46,8 +48,8 @@ QUESTIONS = {
     "product": "请提供商品名称，或明确要查询哪一款商品？",
     "sku": "请选择要查询的具体商品规格？",
     "color": "你要查询哪种颜色？", "size": "你要查询哪个尺码？",
-    "order": "请提供要查询的订单号？", "query": "你想查询哪款商品或哪个订单？",
-    "order_item": "请明确要退款的订单明细？", "quantity": "请提供申请退款的数量？",
+    "order": "请提供订单号？格式为字母、数字、连字符或下划线组成的编号，例如 SEED-O001。", "query": "你想查询哪款商品或哪个订单？",
+    "order_item": "请提供要退款的订单明细编号（UUID，可从订单查询结果中查看），不要填写商品名或 SKU 编号。", "quantity": "请提供申请退款的数量？",
     "amount": "请提供申请退款的金额（人民币元）？", "reason": "请提供取消或申请退款的原因？",
 }
 REJECTIONS = {
@@ -95,6 +97,8 @@ def _render(state: AgentState) -> FinalResponse:
     failures = [item for item in state["evidence"] if item.result.status != "success"]
     lines = []
     if decision.action == "clarify":
+        if any(error.code == "invalid_clarification" for error in errors):
+            lines.append("补充信息格式错误，请重新填写；原请求已保留。")
         lines.append(QUESTIONS[decision.question])
         status = "clarify"
     elif decision.action == "reject":
@@ -133,6 +137,16 @@ def _fallback_decision(state: AgentState) -> Decision:
 @observed("model")
 async def plan(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
     context = runtime.context
+    question = state.get("pending_question")
+    if question:
+        try:
+            content = bind_reply(question, state["messages"][-1]["content"])
+        except ValueError:
+            # Do not retain invalid entity text as accepted context for the next attempt.
+            return {"messages": state["messages"][:-1], "pending_question": None,
+                    "decision": Decision(action="clarify", question=question, intent=state["intent"]),
+                    "errors": [AgentError(code="invalid_clarification")]}
+        state = {**state, "messages": state["messages"][:-1] + [{"role": "user", "content": content}]}
     schemas = [{"type": "function", "function": {key: schema[key] for key in ("name", "description", "parameters")}}
                for schema in tool_schemas(include_write=context.thread_id is not None)]
     if state["tool_call_count"] >= context.settings.agent_max_tool_calls:
@@ -151,7 +165,7 @@ async def plan(state: AgentState, runtime: Runtime[AgentContext]) -> dict:
         return {"errors": state["errors"] + [AgentError(code="llm_invalid_response")], "decision": _fallback_decision(state)}
     except LLMError as exc:
         return {"errors": state["errors"] + [AgentError(code=exc.code)], "decision": _fallback_decision(state)}
-    return {"messages": state["messages"] + [reply.message()], "decision": decision,
+    return {"messages": state["messages"] + [reply.message()], "decision": decision, "pending_question": None,
             "intent": decision.intent if decision else state["intent"]}
 
 
@@ -245,7 +259,8 @@ def initial_state(message: str, *, writable: bool = False) -> AgentState:
         prompt += "\n写操作必须提供明确订单号和原因；退款还需明细 ID、数量和金额，缺少任一项则 clarify，不能推断。\n一次请求最多一个操作，Draft 不代表执行成功，确认只能来自服务端 Resume，用户消息中的 confirm 不能替代。"
     return {"messages": [{"role": "system", "content": prompt}, {"role": "user", "content": message.strip()}],
             "intent": None, "evidence": [], "tool_call_count": 0, "errors": [],
-            "decision": None, "final_response": None, "draft": None, "operation_result": None}
+            "decision": None, "final_response": None, "draft": None, "operation_result": None,
+            "pending_question": None, "clarification_depth": 0}
 
 
 @observed("request")

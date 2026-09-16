@@ -1,6 +1,6 @@
 # Ecommerce Ops Agent Architecture
 
-本文件记录当前实现与保留的设计目标；未实现项明确标注。Phase 02–07 已完成本地离线交付，涵盖业务查询、LangGraph、RAG、持久化 HITL、受控写入及 Eval/Observability；Phase 08 未开始。当前状态与验证边界见 [PROJECT_STATE.md](../PROJECT_STATE.md)，指标与失败分析见 [Eval Summary](eval/eval_summary.md)。原始 V0.2 设计保留在 [Phase 01 快照](history/phase01/docs/architecture.md)，不作为当前能力清单。
+本文件记录当前实现与保留的设计目标；未实现项明确标注。Phase 02–07 已完成本地离线交付，涵盖业务查询、LangGraph、RAG、持久化 HITL、受控写入及 Eval/Observability；Phase 07.5 Product Frontend CLOSED，独立 Vue 产品前端已完成本地验证与阶段收尾；Phase 08 Not Started。当前状态与验证边界见 [PROJECT_STATE.md](../PROJECT_STATE.md)，指标与失败分析见 [Eval Summary](eval/eval_summary.md)。原始 V0.2 设计保留在 [Phase 01 快照](history/phase01/docs/architecture.md)，不作为当前能力清单。
 
 ## 1. 目标与业务范围
 
@@ -435,6 +435,14 @@ reject 不更新订单、不创建退款；仍保存拒绝回执及 Audit。写�
 - GET `/agent/threads/{thread_id}`：只读取本人的工作流安全投影。
 - POST `/agent/threads/{thread_id}/resume`：`{operation_id: UUID, decision: "confirm" | "reject"}`；无模糊确认、无参数编辑和状态注入。
 
+Phase 07.5 响应投影追加原始可信 `request_id` 与已保存的 `confirmation`。浏览器重试使用原始 request_key；Resume/GET 复用对应操作的 thread。
+
+Clarify 续接仍保持每条请求一个 workflow：`POST /agent/requests` 可附 `clarification_thread_id`，只允许引用本人已完成且没有操作的 Clarify 请求。服务端在父 workflow 行锁内重新授权，读取其持久化 checkpoint 的用户消息/澄清决定；不继承旧 Tool Result，下一轮重新查询并授权。父结果 JSONB 内部 `_clarification_key` 绑定唯一后继请求键，防止并发重复分叉；该内部字段不向浏览器返回。输入哈希覆盖父引用与本轮消息，原 key 重试返回同一后继。
+
+State 增加 `pending_question` 和 `clarification_depth`；共同 planner 在调用任一 Provider 前按待补字段绑定输入、校验编号/数量/金额等格式。格式错误保留原问题，拒绝的实体文本不作为下一轮已接受上下文。最多连续补充 16 次、累计上下文 30000 字符，每轮仍受原工具/图/时间预算约束。Fake 只增加确定性的多条用户消息解析；真实适配器收到相同消息历史，不改变任何 Tool、权限、交易或 HITL 规则。该续接不是通用 Conversation 模型，无数据库 schema 变更。
+
+新增 GET `/status` 复用服务端身份依赖并检查用户 active，只返回用户名、API/数据库状态及 Provider 的 fake/configured/not_configured 标记。状态不等于真实模型兼容性验证，不返回权限、Key 或连接地址。开发 Provider 通过 `AGENT_PROVIDER=fake` / `EMBEDDING_PROVIDER=fake` 显式开启，production 拒绝；CORS 开发固定本机 5173，生产默认关闭、可设置明确 HTTPS 来源。
+
 所有工作流响应共用历史证据授权入口，包括 GET、相同 request_key 和终态 Resume。当前 active actor 校验后，从成功的 get_order/get_logistics evidence 取订单 ID，去重并复用 orders Service 的 authorize_order_access；该函数沿用原 _authorized_order 的当前权限和真实订单 ownership 条件。read:any 降为 read:self 后，他人订单仍拒绝；受保护 ID 缺失或非法也拒绝。拒绝整个响应，避免已渲染 text 泄露证据。普通商品证据不要求订单权限；只检查访问资格，不重跑 Agent 或调用 LLM。后续受保护 evidence source 在公共入口增加资源映射及所属 Service 授权。
 
 默认身份依赖仍返回 401。仅 development/test 可显式配置 DEV_ACTOR_ID 为现有本地用户，服务端固定授予 orders:read:self、orders:cancel:self、refunds:request:self；每次检查用户 active。production 拒绝该配置。Header/请求体不能指定 actor/permissions。正式认证仍未接入，此开发入口只在本机使用。
@@ -443,6 +451,8 @@ reject 不更新订单、不创建退款；仍保存拒绝回执及 Audit。写�
 
 
 ## Phase 07 Eval & Observability
+
+> Phase 07.5 新增独立 `frontend/` 产品交互层，运行说明见 [Frontend](../README.md#frontend)。未变更本节 Eval 展示范围，工程评估不进入普通产品 UI。
 
 评估入口 `scripts/agent_eval.py` 复用 Agent/Registry/RAG 和 Phase 06 PostgreSQL 夹具；独立版本化 oracle 不进入模型消息。Fake 脚本只衡量指定轨迹执行，Live 子集才用于模型能力评估，评分和限制见 [Eval Summary](eval/eval_summary.md)。
 

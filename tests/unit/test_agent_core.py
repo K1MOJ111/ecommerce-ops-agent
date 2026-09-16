@@ -54,7 +54,7 @@ def test_real_graph_and_minimal_state():
     graph = build_graph()
     assert graph.checkpointer is None
     assert set(graph.get_graph().nodes) == {"__start__", "plan", "execute_tools", "answer", "clarify", "reject", "confirm_operation", "__end__"}
-    assert set(AgentState.__annotations__) == {"messages", "intent", "evidence", "tool_call_count", "errors", "decision", "final_response", "draft", "operation_result"}
+    assert set(AgentState.__annotations__) == {"messages", "intent", "evidence", "tool_call_count", "errors", "decision", "final_response", "draft", "operation_result", "pending_question", "clarification_depth"}
 
 
 async def test_search_roundtrip(fake_model, harness):

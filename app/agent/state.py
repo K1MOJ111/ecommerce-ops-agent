@@ -56,3 +56,5 @@ class AgentState(TypedDict):
     final_response: FinalResponse | None
     draft: dict | None
     operation_result: dict | None
+    pending_question: Question | None
+    clarification_depth: int
